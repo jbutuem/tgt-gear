@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a0a0a">
+<title>TGT Gear</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg: #0a0a0a;
+  --surface: #141414;
+  --surface-2: #1e1e1e;
+  --surface-3: #282828;
+  --border: #2a2a2a;
+  --border-light: #333;
+  --text: #f0f0f0;
+  --text-dim: #999;
+  --text-muted: #666;
+  --brand: #4f8ef7;
+  --brand-dim: rgba(79,142,247,0.12);
+  --brand-glow: rgba(79,142,247,0.25);
+  --green: #34d399;
+  --green-bg: rgba(52,211,153,0.1);
+  --yellow: #fbbf24;
+  --yellow-bg: rgba(251,191,36,0.1);
+  --red: #f87171;
+  --red-bg: rgba(248,113,113,0.1);
+  --orange: #fb923c;
+  --orange-bg: rgba(251,146,60,0.1);
+  --purple: #a78bfa;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* ─── UTILITIES ─── */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+.mono { font-family: 'IBM Plex Mono', monospace; }
+.fade-in { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--brand); border-radius: 50%; animation: spin 0.6s linear infinite; }
+
+/* ─── LAYOUT ─── */
+#app { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ─── LOGIN ─── */
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(79,142,247,0.06) 0%, transparent 60%);
+}
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 40px 32px;
+}
+.login-logo {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.login-logo h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+.login-logo h1 span { color: var(--brand); }
+.login-logo p { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
+.form-group { margin-bottom: 16px; }
+.form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.form-input {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-input:focus { border-color: var(--brand); }
+.btn {
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-primary { background: var(--brand); color: #fff; }
+.btn-primary:hover { filter: brightness(1.1); }
+.btn-primary:active { transform: scale(0.98); }
+.btn-secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--surface-3); }
+.btn-sm { padding: 8px 14px; font-size: 13px; width: auto; border-radius: 6px; }
+.btn-icon { width: 36px; height: 36px; padding: 0; border-radius: 8px; min-width: 36px; }
+.login-error {
+  background: var(--red-bg);
+  border: 1px solid rgba(248,113,113,0.2);
+  color: var(--red);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+/* ─── HEADER ─── */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(10,10,10,0.85);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.header-left { display: flex; align-items: center; gap: 10px; }
+.header-title { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+.header-title span { color: var(--brand); }
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.user-dot {
+  width: 8px; height: 8px;
+  background: var(--green);
+  border-radius: 50%;
+}
+
+/* ─── NAV ─── */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: rgba(10,10,10,0.92);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid var(--border);
+  display: flex;
+  padding: 6px 8px calc(env(safe-area-inset-bottom, 8px) + 6px);
+}
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s;
+  border-radius: 8px;
+}
+.nav-item.active { color: var(--brand); }
+.nav-item svg { width: 22px; height: 22px; }
+
+/* ─── MAIN CONTENT ─── */
+.main { flex: 1; padding: 16px 16px 90px; }
+.page-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin-bottom: 16px;
+}
+
+/* ─── SEARCH BAR ─── */
+.search-bar {
+  position: relative;
+  margin-bottom: 16px;
+}
+.search-bar input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 11px 14px 11px 40px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.search-bar input:focus { border-color: var(--brand); }
+.search-bar svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  width: 18px;
+  height: 18px;
+}
+
+/* ─── FILTER CHIPS ─── */
+.filter-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.filter-row::-webkit-scrollbar { display: none; }
+.chip {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.chip.active { background: var(--brand-dim); border-color: var(--brand); color: var(--brand); }
+
+/* ─── STATUS BADGE ─── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.badge-available { background: var(--green-bg); color: var(--green); }
+.badge-reserved { background: var(--yellow-bg); color: var(--yellow); }
+.badge-in_use { background: var(--orange-bg); color: var(--orange); }
+.badge-maintenance { background: var(--red-bg); color: var(--red); }
+.badge-unavailable { background: rgba(102,102,102,0.15); color: var(--text-muted); }
+.badge-active { background: var(--green-bg); color: var(--green); }
+.badge-completed { background: rgba(102,102,102,0.15); color: var(--text-muted); }
+.badge-cancelled { background: var(--red-bg); color: var(--red); }
+
+/* ─── CARDS ─── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.card:hover { border-color: var(--border-light); }
+.card:active { transform: scale(0.99); }
+.card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.card-title { font-size: 16px; font-weight: 600; }
+.card-subtitle { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+.card-meta { display: flex; gap: 12px; margin-top: 10px; font-size: 12px; color: var(--text-muted); }
+.card-meta span { display: flex; align-items: center; gap: 4px; }
+
+/* ─── MODAL ─── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+.modal {
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  background: var(--surface);
+  border-radius: 20px 20px 0 0;
+  overflow-y: auto;
+  animation: slideUp 0.3s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal-header {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 1;
+}
+.modal-header h2 { font-size: 18px; font-weight: 600; }
+.modal-close {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  border: none;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 18px;
+}
+.modal-body { padding: 20px; }
+
+/* ─── DETAIL VIEW ─── */
+.detail-hero {
+  text-align: center;
+  padding: 24px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.detail-icon { font-size: 48px; margin-bottom: 12px; }
+.detail-name { font-size: 22px; font-weight: 700; }
+.detail-code { font-family: 'IBM Plex Mono', monospace; color: var(--text-muted); font-size: 13px; margin-top: 4px; }
+.detail-section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.detail-section h3 { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+.detail-row { display: flex; justify-content: space-between; padding: 8px 0; }
+.detail-row .label { color: var(--text-dim); font-size: 14px; }
+.detail-row .value { font-weight: 500; font-size: 14px; }
+.detail-actions { padding: 16px 20px 32px; display: flex; gap: 10px; }
+.detail-actions .btn { flex: 1; }
+
+/* ─── TIMELINE ─── */
+.timeline { padding: 0; }
+.timeline-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  position: relative;
+}
+.timeline-dot {
+  width: 8px; height: 8px;
+  background: var(--brand);
+  border-radius: 50%;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+.timeline-content { flex: 1; }
+.timeline-text { font-size: 13px; }
+.timeline-date { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+/* ─── PRODUCTION CARD ─── */
+.prod-equipment { margin-top: 12px; }
+.prod-eq-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.prod-eq-name { font-weight: 500; }
+
+/* ─── EMPTY STATE ─── */
+.empty {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-muted);
+}
+.empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+.empty p { font-size: 14px; }
+
+/* ─── TOAST ─── */
+.toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  z-index: 300;
+  animation: fadeIn 0.2s ease;
+  white-space: nowrap;
+}
+
+/* ─── FORM MODAL ─── */
+.form-modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+.form-modal-actions .btn { flex: 1; }
+select.form-input { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
+
+/* ─── RESPONSIVE ─── */
+@media (min-width: 768px) {
+  .main { max-width: 600px; margin: 0 auto; padding: 24px 16px 90px; }
+  .modal { border-radius: 20px; margin-bottom: 20px; }
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+// ─── SUPABASE CONFIG ───
+const SUPABASE_URL = 'https://opqivuzvyvvvajokutvc.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9wcWl2dXp2eXZ2dmFqb2t1dHZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5MDI5MTgsImV4cCI6MjA5MDQ3ODkxOH0.QXpHO_SM-vuLKxxH2k-KQrhWscbPjdGZNPOw7xi39yU';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ─── STATE ───
+let state = {
+  user: null,
+  profile: null,
+  view: 'login', // login | equipment | productions | history
+  equipment: [],
+  categories: [],
+  productions: [],
+  profiles: [],
+  history: [],
+  search: '',
+  filter: 'all',
+  modal: null, // null | {type, data}
+  loading: false,
+  toast: null,
+};
+
+// ─── ICONS ───
+const icons = {
+  equipment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>',
+  productions: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>',
+  history: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+  logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+  checkout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>',
+  checkin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>',
+};
+
+const statusLabels = {
+  available: 'Disponível',
+  reserved: 'Reservado',
+  in_use: 'Em Uso',
+  maintenance: 'Manutenção',
+  unavailable: 'Indisponível',
+  active: 'Ativa',
+  completed: 'Concluída',
+  cancelled: 'Cancelada',
+  checked_out: 'Retirado',
+  returned: 'Devolvido',
+  ok: 'OK',
+  weak_battery: 'Bateria Fraca',
+  missing_cable: 'Cabo Faltando',
+  noise: 'Ruído',
+  damaged: 'Danificado',
+  needs_maintenance: 'Manutenção',
+};
+
+// ─── HELPERS ───
+function fmt(d) { if (!d) return '—'; const dt = new Date(d); return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }); }
+function fmtFull(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+function getCatIcon(catId) { const c = state.categories.find(x => x.id === catId); return c ? c.icon : '📦'; }
+function getCatName(catId) { const c = state.categories.find(x => x.id === catId); return c ? c.name : ''; }
+function getProfileName(id) { const p = state.profiles.find(x => x.id === id); return p ? p.name : '—'; }
+function showToast(msg) {
+  state.toast = msg;
+  render();
+  setTimeout(() => { state.toast = null; render(); }, 2500);
+}
+
+// ─── DATA ───
+async function loadData() {
+  state.loading = true; render();
+  const [eq, cat, prod, prof, hist] = await Promise.all([
+    sb.from('equipment').select('*').order('name'),
+    sb.from('categories').select('*').order('name'),
+    sb.from('productions').select('*').order('start_date', { ascending: false }),
+    sb.from('profiles').select('*').order('name'),
+    sb.from('equipment_history').select('*').order('created_at', { ascending: false }).limit(50),
+  ]);
+  state.equipment = eq.data || [];
+  state.categories = cat.data || [];
+  state.productions = prod.data || [];
+  state.profiles = prof.data || [];
+  state.history = hist.data || [];
+
+  // Load production items
+  if (state.productions.length) {
+    const { data: items } = await sb.from('production_items').select('*');
+    state.productions.forEach(p => {
+      p._items = (items || []).filter(i => i.production_id === p.id);
+    });
+  }
+  state.loading = false; render();
+}
+
+// ─── AUTH ───
+async function handleLogin(email, password) {
+  state.loading = true; render();
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) { state.loading = false; return error.message; }
+  state.user = data.user;
+  const { data: prof } = await sb.from('profiles').select('*').eq('id', data.user.id).single();
+  state.profile = prof;
+  state.view = 'equipment';
+  await loadData();
+  return null;
+}
+
+async function handleLogout() {
+  await sb.auth.signOut();
+  state = { ...state, user: null, profile: null, view: 'login', equipment: [], modal: null };
+  render();
+}
+
+async function checkSession() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    state.user = session.user;
+    const { data: prof } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
+    state.profile = prof;
+    state.view = 'equipment';
+    await loadData();
+  }
+  render();
+}
+
+// ─── ACTIONS ───
+async function checkoutEquipment(eqId, productionId) {
+  await sb.from('equipment').update({ status: 'in_use' }).eq('id', eqId);
+  if (productionId) {
+    await sb.from('production_items').update({
+      status: 'checked_out',
+      checkout_at: new Date().toISOString(),
+      checkout_by: state.user.id,
+    }).eq('equipment_id', eqId).eq('production_id', productionId);
+  }
+  await sb.from('equipment_history').insert({
+    equipment_id: eqId,
+    production_id: productionId || null,
+    action: 'checkout',
+    previous_status: 'available',
+    new_status: 'in_use',
+    performed_by: state.user.id,
+  });
+  showToast('✓ Check-out realizado');
+  state.modal = null;
+  await loadData();
+}
+
+async function checkinEquipment(eqId, productionId, condition, notes) {
+  await sb.from('equipment').update({ status: 'available', condition_notes: notes || null }).eq('id', eqId);
+  if (productionId) {
+    await sb.from('production_items').update({
+      status: 'returned',
+      checkin_at: new Date().toISOString(),
+      checkin_by: state.user.id,
+      condition: condition || 'ok',
+      condition_notes: notes || null,
+    }).eq('equipment_id', eqId).eq('production_id', productionId);
+  }
+  await sb.from('equipment_history').insert({
+    equipment_id: eqId,
+    production_id: productionId || null,
+    action: 'checkin',
+    previous_status: 'in_use',
+    new_status: 'available',
+    performed_by: state.user.id,
+    notes: condition !== 'ok' ? `${statusLabels[condition] || condition}${notes ? ': ' + notes : ''}` : notes || null,
+  });
+  showToast('✓ Check-in realizado');
+  state.modal = null;
+  await loadData();
+}
+
+async function setMaintenance(eqId, notes) {
+  await sb.from('equipment').update({ status: 'maintenance', condition_notes: notes }).eq('id', eqId);
+  await sb.from('equipment_history').insert({
+    equipment_id: eqId, action: 'maintenance',
+    previous_status: 'available', new_status: 'maintenance',
+    performed_by: state.user.id, notes,
+  });
+  showToast('⚠️ Equipamento em manutenção');
+  state.modal = null;
+  await loadData();
+}
+
+// ─── RENDER ───
+function render() {
+  const app = document.getElementById('app');
+  if (state.view === 'login') { app.innerHTML = renderLogin(); return; }
+  app.innerHTML = renderHeader() + '<div class="main fade-in">' + renderPage() + '</div>' + renderNav() + renderModal() + renderToast();
+}
+
+function renderLogin() {
+  return `<div class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">
+        <h1>TGT <span>Gear</span></h1>
+        <p>Controle de Equipamentos</p>
+      </div>
+      <div id="login-error"></div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" class="form-input" id="login-email" placeholder="seu@email.com" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label>Senha</label>
+        <input type="password" class="form-input" id="login-pass" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary" onclick="doLogin()" style="margin-top:8px">Entrar</button>
+    </div>
+  </div>`;
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value;
+  const pass = document.getElementById('login-pass').value;
+  const err = await handleLogin(email, pass);
+  if (err) {
+    document.getElementById('login-error').innerHTML = `<div class="login-error">${err}</div>`;
+  }
+}
+
+function renderHeader() {
+  return `<header class="app-header">
+    <div class="header-left">
+      <div class="header-title">TGT <span>Gear</span></div>
+    </div>
+    <div class="header-user">
+      <div class="user-dot"></div>
+      ${state.profile?.name || ''}
+      <button class="btn-icon btn-secondary" onclick="handleLogout()" title="Sair">${icons.logout}</button>
+    </div>
+  </header>`;
+}
+
+function renderNav() {
+  const tabs = [
+    { id: 'equipment', icon: icons.equipment, label: 'Equipamentos' },
+    { id: 'productions', icon: icons.productions, label: 'Produções' },
+    { id: 'history', icon: icons.history, label: 'Histórico' },
+  ];
+  return `<nav class="bottom-nav">
+    ${tabs.map(t => `<button class="nav-item ${state.view === t.id ? 'active' : ''}" onclick="navigate('${t.id}')">${t.icon}<span>${t.label}</span></button>`).join('')}
+  </nav>`;
+}
+
+function navigate(view) { state.view = view; state.search = ''; state.filter = 'all'; render(); }
+
+function renderPage() {
+  if (state.loading) return '<div style="display:flex;justify-content:center;padding:40px"><div class="spinner"></div></div>';
+  switch (state.view) {
+    case 'equipment': return renderEquipment();
+    case 'productions': return renderProductions();
+    case 'history': return renderHistory();
+    default: return '';
+  }
+}
+
+// ─── EQUIPMENT PAGE ───
+function renderEquipment() {
+  const filters = ['all', 'available', 'in_use', 'reserved', 'maintenance'];
+  let items = state.equipment;
+  if (state.filter !== 'all') items = items.filter(e => e.status === state.filter);
+  if (state.search) {
+    const q = state.search.toLowerCase();
+    items = items.filter(e => e.name.toLowerCase().includes(q) || e.internal_code.toLowerCase().includes(q) || (e.brand || '').toLowerCase().includes(q));
+  }
+  const counts = {};
+  state.equipment.forEach(e => { counts[e.status] = (counts[e.status] || 0) + 1; });
+  counts.all = state.equipment.length;
+
+  return `<div class="page-title">Equipamentos</div>
+    <div class="search-bar">${icons.search}<input placeholder="Buscar equipamento..." value="${state.search}" oninput="state.search=this.value;render()"></div>
+    <div class="filter-row">
+      ${filters.map(f => `<button class="chip ${state.filter === f ? 'active' : ''}" onclick="state.filter='${f}';render()">
+        ${f === 'all' ? 'Todos' : statusLabels[f]} (${counts[f] || 0})
+      </button>`).join('')}
+    </div>
+    ${items.length ? items.map(renderEquipmentCard).join('') : '<div class="empty"><div class="empty-icon">📷</div><p>Nenhum equipamento encontrado</p></div>'}`;
+}
+
+function renderEquipmentCard(eq) {
+  return `<div class="card" onclick="openEquipDetail('${eq.id}')">
+    <div class="card-top">
+      <div>
+        <div class="card-title">${getCatIcon(eq.category_id)} ${eq.name}</div>
+        <div class="card-subtitle">${eq.brand || ''} ${eq.model || ''}</div>
+      </div>
+      <span class="badge badge-${eq.status}">${statusLabels[eq.status]}</span>
+    </div>
+    <div class="card-meta">
+      <span class="mono">${eq.internal_code}</span>
+      <span>${getCatName(eq.category_id)}</span>
+      ${eq.location ? `<span>📍 ${eq.location}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+function openEquipDetail(id) {
+  const eq = state.equipment.find(e => e.id === id);
+  if (eq) { state.modal = { type: 'equip-detail', data: eq }; render(); }
+}
+
+// ─── PRODUCTIONS PAGE ───
+function renderProductions() {
+  let items = state.productions;
+  if (state.search) {
+    const q = state.search.toLowerCase();
+    items = items.filter(p => p.name.toLowerCase().includes(q) || (p.client || '').toLowerCase().includes(q));
+  }
+  return `<div class="page-title">Produções</div>
+    <div class="search-bar">${icons.search}<input placeholder="Buscar produção..." value="${state.search}" oninput="state.search=this.value;render()"></div>
+    ${items.length ? items.map(renderProductionCard).join('') : '<div class="empty"><div class="empty-icon">🎬</div><p>Nenhuma produção encontrada</p></div>'}`;
+}
+
+function renderProductionCard(prod) {
+  const eqCount = (prod._items || []).length;
+  return `<div class="card" onclick="openProdDetail('${prod.id}')">
+    <div class="card-top">
+      <div>
+        <div class="card-title">${prod.name}</div>
+        <div class="card-subtitle">${prod.client || 'Interna'} · ${prod.type === 'external' ? 'Externa' : 'Interna'}</div>
+      </div>
+      <span class="badge badge-${prod.status}">${statusLabels[prod.status]}</span>
+    </div>
+    <div class="card-meta">
+      <span>📅 ${fmt(prod.start_date)} → ${fmt(prod.end_date)}</span>
+      <span>📷 ${eqCount} itens</span>
+      <span>👤 ${getProfileName(prod.responsible_id)}</span>
+    </div>
+  </div>`;
+}
+
+function openProdDetail(id) {
+  const prod = state.productions.find(p => p.id === id);
+  if (prod) { state.modal = { type: 'prod-detail', data: prod }; render(); }
+}
+
+// ─── HISTORY PAGE ───
+function renderHistory() {
+  return `<div class="page-title">Histórico</div>
+    ${state.history.length ? '<div class="timeline">' + state.history.map(h => {
+      const eq = state.equipment.find(e => e.id === h.equipment_id);
+      const actionLabel = { checkout: '➡️ Check-out', checkin: '⬅️ Check-in', maintenance: '🔧 Manutenção', status_change: '🔄 Status', observation: '📝 Observação' };
+      return `<div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <div class="timeline-text"><strong>${eq ? eq.name : '—'}</strong> — ${actionLabel[h.action] || h.action}</div>
+          ${h.notes ? `<div class="timeline-text" style="color:var(--text-dim)">${h.notes}</div>` : ''}
+          <div class="timeline-date">${fmtFull(h.created_at)} · ${getProfileName(h.performed_by)}</div>
+        </div>
+      </div>`;
+    }).join('') + '</div>' : '<div class="empty"><div class="empty-icon">🕐</div><p>Nenhum registro ainda</p></div>'}`;
+}
+
+// ─── MODALS ───
+function renderModal() {
+  if (!state.modal) return '';
+  switch (state.modal.type) {
+    case 'equip-detail': return renderEquipDetailModal(state.modal.data);
+    case 'prod-detail': return renderProdDetailModal(state.modal.data);
+    case 'checkout': return renderCheckoutModal(state.modal.data);
+    case 'checkin': return renderCheckinModal(state.modal.data);
+    default: return '';
+  }
+}
+
+function closeModal() { state.modal = null; render(); }
+
+function renderEquipDetailModal(eq) {
+  const isAdmin = state.profile?.role === 'admin';
+  return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-header"><h2>Detalhes</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="detail-hero">
+      <div class="detail-icon">${getCatIcon(eq.category_id)}</div>
+      <div class="detail-name">${eq.name}</div>
+      <div class="detail-code">${eq.internal_code}</div>
+      <div style="margin-top:10px"><span class="badge badge-${eq.status}">${statusLabels[eq.status]}</span></div>
+    </div>
+    <div class="detail-section">
+      <h3>Informações</h3>
+      <div class="detail-row"><span class="label">Categoria</span><span class="value">${getCatName(eq.category_id)}</span></div>
+      <div class="detail-row"><span class="label">Marca</span><span class="value">${eq.brand || '—'}</span></div>
+      <div class="detail-row"><span class="label">Modelo</span><span class="value">${eq.model || '—'}</span></div>
+      <div class="detail-row"><span class="label">Nº Série</span><span class="value mono">${eq.serial_number || '—'}</span></div>
+      <div class="detail-row"><span class="label">Local</span><span class="value">${eq.location || '—'}</span></div>
+      ${eq.condition_notes ? `<div class="detail-row"><span class="label">Obs</span><span class="value">${eq.condition_notes}</span></div>` : ''}
+    </div>
+    <div class="detail-actions">
+      ${eq.status === 'available' ? `<button class="btn btn-primary" onclick="state.modal={type:'checkout',data:${JSON.stringify(eq).replace(/'/g,"\\'")}};render()">${icons.checkout} Retirar</button>` : ''}
+      ${eq.status === 'in_use' ? `<button class="btn btn-primary" onclick="state.modal={type:'checkin',data:${JSON.stringify(eq).replace(/'/g,"\\'")}};render()">${icons.checkin} Devolver</button>` : ''}
+      ${eq.status === 'available' && isAdmin ? `<button class="btn btn-secondary" onclick="setMaintenance('${eq.id}','Enviado para manutenção')">🔧 Manutenção</button>` : ''}
+      ${eq.status === 'maintenance' && isAdmin ? `<button class="btn btn-primary" onclick="fixEquip('${eq.id}')">✓ Liberar</button>` : ''}
+    </div>
+  </div></div>`;
+}
+
+async function fixEquip(id) {
+  await sb.from('equipment').update({ status: 'available', condition_notes: null }).eq('id', id);
+  await sb.from('equipment_history').insert({ equipment_id: id, action: 'status_change', previous_status: 'maintenance', new_status: 'available', performed_by: state.user.id, notes: 'Liberado da manutenção' });
+  showToast('✓ Equipamento liberado');
+  state.modal = null;
+  await loadData();
+}
+
+function renderCheckoutModal(eq) {
+  const activeProd = state.productions.filter(p => p.status === 'reserved' || p.status === 'active');
+  return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-header"><h2>Retirar Equipamento</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <p style="margin-bottom:16px;color:var(--text-dim)">Confirmar retirada de <strong>${eq.name}</strong></p>
+      <div class="form-group">
+        <label>Vincular a uma produção (opcional)</label>
+        <select class="form-input" id="checkout-prod">
+          <option value="">— Sem vínculo —</option>
+          ${activeProd.map(p => `<option value="${p.id}">${p.name} (${p.client || 'Interna'})</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="checkoutEquipment('${eq.id}', document.getElementById('checkout-prod').value)">Confirmar Retirada</button>
+      </div>
+    </div>
+  </div></div>`;
+}
+
+function renderCheckinModal(eq) {
+  return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-header"><h2>Devolver Equipamento</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <p style="margin-bottom:16px;color:var(--text-dim)">Devolvendo <strong>${eq.name}</strong></p>
+      <div class="form-group">
+        <label>Condição</label>
+        <select class="form-input" id="checkin-cond">
+          <option value="ok">✅ OK — Funcionando perfeitamente</option>
+          <option value="weak_battery">🔋 Bateria fraca</option>
+          <option value="missing_cable">🔌 Cabo faltando</option>
+          <option value="noise">🔊 Ruído / problema de áudio</option>
+          <option value="damaged">⚠️ Danificado</option>
+          <option value="needs_maintenance">🔧 Precisa de manutenção</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Observações (opcional)</label>
+        <input type="text" class="form-input" id="checkin-notes" placeholder="Detalhe qualquer problema...">
+      </div>
+      <div class="form-modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="checkinEquipment('${eq.id}', null, document.getElementById('checkin-cond').value, document.getElementById('checkin-notes').value)">Confirmar Devolução</button>
+      </div>
+    </div>
+  </div></div>`;
+}
+
+function renderProdDetailModal(prod) {
+  const items = prod._items || [];
+  return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+    <div class="modal-header"><h2>${prod.name}</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="detail-section">
+      <h3>Informações</h3>
+      <div class="detail-row"><span class="label">Cliente</span><span class="value">${prod.client || 'Interno'}</span></div>
+      <div class="detail-row"><span class="label">Tipo</span><span class="value">${prod.type === 'external' ? 'Externa' : 'Interna'}</span></div>
+      <div class="detail-row"><span class="label">Período</span><span class="value">${fmt(prod.start_date)} → ${fmt(prod.end_date)}</span></div>
+      <div class="detail-row"><span class="label">Responsável</span><span class="value">${getProfileName(prod.responsible_id)}</span></div>
+      <div class="detail-row"><span class="label">Operador</span><span class="value">${getProfileName(prod.operator_id)}</span></div>
+      <div class="detail-row"><span class="label">Status</span><span class="value"><span class="badge badge-${prod.status}">${statusLabels[prod.status]}</span></span></div>
+      ${prod.notes ? `<div class="detail-row"><span class="label">Obs</span><span class="value">${prod.notes}</span></div>` : ''}
+    </div>
+    <div class="detail-section">
+      <h3>Equipamentos (${items.length})</h3>
+      ${items.length ? items.map(i => {
+        const eq = state.equipment.find(e => e.id === i.equipment_id);
+        return `<div class="prod-eq-item">
+          <span class="prod-eq-name">${eq ? getCatIcon(eq.category_id) + ' ' + eq.name : '—'}</span>
+          <span class="badge badge-${i.status}">${statusLabels[i.status]}</span>
+        </div>`;
+      }).join('') : '<p style="color:var(--text-muted);font-size:13px">Nenhum equipamento vinculado</p>'}
+    </div>
+  </div></div>`;
+}
+
+function renderToast() {
+  return state.toast ? `<div class="toast">${state.toast}</div>` : '';
+}
+
+// ─── INIT ───
+checkSession();
+
+// Handle enter on login
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && state.view === 'login') doLogin();
+});
+</script>
+</body>
+</html>
