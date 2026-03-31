@@ -485,6 +485,7 @@ let productions = [];
 let productionItems = [];
 let profiles = [];
 let calDate = new Date();
+let hasFeeType = false;
 
 // ==================== SUPABASE HELPERS ====================
 async function sb(path, opts = {}) {
@@ -593,13 +594,36 @@ async function initApp() {
 function loginKeyHandler(e) { if (e.key === 'Enter') doLogin(); }
 
 async function loadData() {
-  [categories, equipment, productions, productionItems, profiles] = await Promise.all([
-    sb('/rest/v1/categories?select=*&order=name'),
-    sb('/rest/v1/equipment?select=*,categories(name,icon)&order=name'),
-    sb('/rest/v1/productions?select=*,responsible:profiles!productions_responsible_id_fkey(name),operator:profiles!productions_operator_id_fkey(name)&order=start_date.desc'),
-    sb('/rest/v1/production_items?select=*,equipment(name,internal_code)'),
-    sb('/rest/v1/profiles?select=*&order=name')
-  ]);
+  const baseCols = 'id,name,type,client,start_date,end_date,responsible_id,operator_id,status,notes';
+  const joins = ',responsible:profiles!productions_responsible_id_fkey(name),operator:profiles!productions_operator_id_fkey(name)';
+  const order = '&order=start_date.desc';
+
+  // First try with fee_type
+  try {
+    [categories, equipment, productions, productionItems, profiles] = await Promise.all([
+      sb('/rest/v1/categories?select=*&order=name'),
+      sb('/rest/v1/equipment?select=*,categories(name,icon)&order=name'),
+      sb(`/rest/v1/productions?select=${baseCols},fee_type${joins}${order}`),
+      sb('/rest/v1/production_items?select=*,equipment(name,internal_code)'),
+      sb('/rest/v1/profiles?select=*&order=name')
+    ]);
+    hasFeeType = true;
+  } catch(e) {
+    // fee_type column probably doesn't exist, retry without it
+    try {
+      [categories, equipment, productions, productionItems, profiles] = await Promise.all([
+        sb('/rest/v1/categories?select=*&order=name'),
+        sb('/rest/v1/equipment?select=*,categories(name,icon)&order=name'),
+        sb(`/rest/v1/productions?select=${baseCols}${joins}${order}`),
+        sb('/rest/v1/production_items?select=*,equipment(name,internal_code)'),
+        sb('/rest/v1/profiles?select=*&order=name')
+      ]);
+      hasFeeType = false;
+    } catch(e2) {
+      toast('Erro ao carregar dados: ' + e2.message);
+      return;
+    }
+  }
   populateSelects();
 }
 
@@ -654,13 +678,13 @@ function renderDashboard() {
     document.getElementById('upcomingProductions').innerHTML = '<div class="empty-state"><p>Nenhuma produção nos próximos 7 dias</p></div>';
   } else {
     document.getElementById('upcomingProductions').innerHTML = `<div class="tbl-wrap"><table>
-      <tr><th>Produção</th><th>Cliente</th><th>Data</th><th>Status</th>${isAdmin ? '<th>Fee</th>' : ''}</tr>
+      <tr><th>Produção</th><th>Cliente</th><th>Data</th><th>Status</th>${isAdmin && hasFeeType ? '<th>Fee</th>' : ''}</tr>
       ${upcoming.map(p => `<tr>
         <td style="font-weight:600">${esc(p.name)}</td>
         <td>${esc(p.client||'—')}</td>
         <td style="font-family:var(--mono);font-size:12px;">${fmtDate(p.start_date)}</td>
         <td>${statusBadge(p.status)}</td>
-        ${isAdmin ? `<td>${feeBadge(p.fee_type)}</td>` : ''}
+        ${isAdmin && hasFeeType ? `<td>${feeBadge(p.fee_type)}</td>` : ''}
       </tr>`).join('')}
     </table></div>`;
   }
@@ -777,7 +801,7 @@ function renderProductions() {
   }
 
   document.getElementById('productionsList').innerHTML = `<div class="tbl-wrap"><table>
-    <tr><th>Produção</th><th>Cliente</th><th>Período</th><th>Responsável</th><th>Status</th>${isAdmin?'<th>Fee</th>':''}<th>Equip.</th><th>Ações</th></tr>
+    <tr><th>Produção</th><th>Cliente</th><th>Período</th><th>Responsável</th><th>Status</th>${isAdmin&&hasFeeType?'<th>Fee</th>':''}<th>Equip.</th><th>Ações</th></tr>
     ${filtered.map(p => {
       const items = productionItems.filter(pi => pi.production_id === p.id);
       return `<tr>
@@ -786,7 +810,7 @@ function renderProductions() {
         <td style="font-family:var(--mono);font-size:12px;">${fmtDate(p.start_date)} → ${fmtDate(p.end_date)}</td>
         <td>${esc(p.responsible?.name||'—')}</td>
         <td>${statusBadge(p.status)}</td>
-        ${isAdmin?`<td>${feeBadge(p.fee_type)}</td>`:''}
+        ${isAdmin&&hasFeeType?`<td>${feeBadge(p.fee_type)}</td>`:''}
         <td><button class="btn btn-secondary btn-sm" onclick="openItemsModal('${p.id}')">📦 ${items.length}</button></td>
         <td><button class="btn-icon" onclick="editProduction('${p.id}')" title="Editar">✎</button></td>
       </tr>`;
@@ -838,7 +862,7 @@ async function saveProduction() {
     status: document.getElementById('prodStatus').value,
     notes: document.getElementById('prodNotes').value.trim() || null
   };
-  if (isAdmin) data.fee_type = document.getElementById('prodFeeType').value;
+  if (isAdmin && hasFeeType) data.fee_type = document.getElementById('prodFeeType').value;
   if (!data.name) return toast('Preencha o nome da produção');
   try {
     if (id) {
@@ -943,7 +967,7 @@ function renderCalendar() {
     
     html += `<div class="cal-day${isToday ? ' today' : ''}">
       <div class="cal-day-num">${d}</div>
-      ${dayProds.slice(0,3).map(p => `<div class="cal-evt ${p.fee_type === 'extra_fee' ? 'extra' : p.fee_type === 'fee' ? 'fee' : 'default'}" title="${esc(p.name)}">${esc(p.name)}</div>`).join('')}
+      ${dayProds.slice(0,3).map(p => `<div class="cal-evt ${hasFeeType && p.fee_type === 'extra_fee' ? 'extra' : hasFeeType && p.fee_type === 'fee' ? 'fee' : 'default'}" title="${esc(p.name)}">${esc(p.name)}</div>`).join('')}
       ${dayProds.length > 3 ? `<div style="font-size:9px;color:var(--text3)">+${dayProds.length-3} mais</div>` : ''}
     </div>`;
   }
