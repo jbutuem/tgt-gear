@@ -1309,10 +1309,7 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-// Close modals on overlay click
-document.querySelectorAll('.modal-overlay').forEach(o => {
-  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('active'); });
-});
+// Modals only close via ✕ or Cancel buttons — no accidental closing
 
 // Close share menu on outside click
 document.addEventListener('click', e => {
