@@ -310,9 +310,9 @@ body.is-admin .admin-only{display:initial;}
         <div style="display:flex;gap:8px;">
           <select id="prodStatusFilter" style="width:auto;min-width:140px;" onchange="renderProductions()">
             <option value="">Todos status</option>
-            <option value="draft">Rascunho</option>
-            <option value="confirmed">Confirmada</option>
-            <option value="in_progress">Em andamento</option>
+            <option value="reserved">Reservada</option>
+            <option value="active">Ativa</option>
+            
             <option value="completed">Concluída</option>
             <option value="cancelled">Cancelada</option>
           </select>
@@ -444,7 +444,7 @@ body.is-admin .admin-only{display:initial;}
         <div class="form-group"><label>Responsável</label><select id="prodResponsible"></select></div>
         <div class="form-group"><label>Operador</label><select id="prodOperator"></select></div>
       </div>
-      <div class="form-group"><label>Status</label><select id="prodStatus"><option value="draft">Rascunho</option><option value="confirmed">Confirmada</option><option value="in_progress">Em andamento</option><option value="completed">Concluída</option><option value="cancelled">Cancelada</option></select></div>
+      <div class="form-group"><label>Status</label><select id="prodStatus"><option value="reserved">Reservada</option><option value="active">Ativa</option><option value="completed">Concluída</option><option value="cancelled">Cancelada</option></select></div>
       <div class="form-group"><label>Observações</label><textarea id="prodNotes" rows="2"></textarea></div>
     </div>
     <div class="modal-footer">
@@ -660,7 +660,7 @@ function renderDashboard() {
   const totalEq = equipment.length;
   const available = equipment.filter(e => e.status === 'available').length;
   const inUse = equipment.filter(e => e.status === 'in_use').length;
-  const activeProd = productions.filter(p => p.status === 'in_progress' || p.status === 'confirmed').length;
+  const activeProd = productions.filter(p => p.status === 'active' || p.status === 'reserved').length;
 
   document.getElementById('dashStats').innerHTML = `
     <div class="stat-card"><div class="stat-value">${totalEq}</div><div class="stat-label">Equipamentos</div></div>
@@ -838,7 +838,7 @@ function openProductionModal(id) {
     ['prodName','prodClient','prodNotes'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('prodType').value = 'internal';
     document.getElementById('prodFeeType').value = 'fee';
-    document.getElementById('prodStatus').value = 'draft';
+    document.getElementById('prodStatus').value = 'reserved';
     document.getElementById('prodStart').value = '';
     document.getElementById('prodEnd').value = '';
     document.getElementById('prodResponsible').value = '';
@@ -1030,10 +1030,8 @@ function statusBadge(s) {
     available: ['Disponível','badge-available'],
     in_use: ['Em uso','badge-in-use'],
     maintenance: ['Manutenção','badge-maintenance'],
-    reserved: ['Reservado','badge-reserved'],
-    draft: ['Rascunho','badge-maintenance'],
-    confirmed: ['Confirmada','badge-reserved'],
-    in_progress: ['Em andamento','badge-in-use'],
+    reserved: ['Reservada','badge-reserved'],
+    active: ['Ativa','badge-in-use'],
     completed: ['Concluída','badge-available'],
     cancelled: ['Cancelada','badge-maintenance']
   };
