@@ -201,6 +201,41 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 /* ADMIN ONLY */
 .admin-only{display:none;}
 body.is-admin .admin-only{display:initial;}
+
+/* PRODUCTION WIZARD STEPS */
+.prod-steps{display:flex;align-items:center;gap:8px;margin-top:4px;}
+.prod-step{font-size:11px;color:var(--text3);font-weight:600;letter-spacing:0.5px;}
+.prod-step.active{color:var(--red);}
+.prod-step-arrow{font-size:11px;color:var(--border);}
+
+/* EQUIPMENT PICKER */
+.eq-picker-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap;}
+.eq-picker-search{position:relative;flex:1;min-width:200px;}
+.eq-picker-search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);}
+.eq-picker-search input{padding-left:32px;font-size:13px;}
+.eq-picker-count{font-family:var(--mono);font-size:12px;color:var(--red);font-weight:600;white-space:nowrap;background:var(--red-dim);padding:4px 12px;border-radius:99px;}
+
+.eq-cat-section{margin-bottom:20px;}
+.eq-cat-title{font-size:12px;font-weight:700;color:var(--text2);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:8px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.eq-cat-title span{font-size:16px;}
+.eq-cat-count{font-family:var(--mono);font-size:10px;color:var(--text3);background:var(--surface2);padding:2px 6px;border-radius:4px;}
+
+.eq-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;}
+.eq-card{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface2);border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:var(--transition);user-select:none;}
+.eq-card:hover{border-color:var(--border-hover);background:var(--surface3);}
+.eq-card.selected{border-color:var(--red);background:var(--red-dim);}
+.eq-card.unavailable{opacity:0.4;cursor:not-allowed;}
+.eq-card-check{width:20px;height:20px;border:2px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:var(--transition);font-size:12px;color:transparent;}
+.eq-card.selected .eq-card-check{background:var(--red);border-color:var(--red);color:#fff;}
+.eq-card-info{flex:1;min-width:0;}
+.eq-card-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.eq-card-meta{font-size:10px;color:var(--text3);font-family:var(--mono);display:flex;gap:8px;}
+.eq-card-status{font-size:9px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;}
+.eq-card.selected .eq-card-name{color:var(--red);}
+
+@media(max-width:640px){
+  .eq-card-grid{grid-template-columns:1fr;}
+}
 </style>
 </head>
 <body>
@@ -438,14 +473,22 @@ body.is-admin .admin-only{display:initial;}
   </div>
 </div>
 
-<!-- PRODUCTION MODAL -->
+<!-- PRODUCTION MODAL — 2-STEP WIZARD -->
 <div class="modal-overlay" id="prodModal">
-  <div class="modal">
+  <div class="modal" style="max-width:680px;">
     <div class="modal-header">
-      <div class="modal-title" id="prodModalTitle">Nova Produção</div>
+      <div>
+        <div class="modal-title" id="prodModalTitle">Nova Produção</div>
+        <div class="prod-steps">
+          <span class="prod-step active" id="prodStep1Label">① Info</span>
+          <span class="prod-step-arrow">→</span>
+          <span class="prod-step" id="prodStep2Label">② Equipamentos</span>
+        </div>
+      </div>
       <button class="btn-icon" onclick="closeModal('prodModal')">✕</button>
     </div>
-    <div class="modal-body">
+    <!-- STEP 1: Info -->
+    <div class="modal-body" id="prodStep1">
       <input type="hidden" id="prodId">
       <div class="form-group"><label>Nome da Produção *</label><input id="prodName" placeholder="Ex: Shoot Kerry Brands"></div>
       <div class="form-row">
@@ -467,9 +510,22 @@ body.is-admin .admin-only{display:initial;}
       <div class="form-group"><label>Status</label><select id="prodStatus"><option value="reserved">Reservada</option><option value="active">Ativa</option><option value="completed">Concluída</option><option value="cancelled">Cancelada</option></select></div>
       <div class="form-group"><label>Observações</label><textarea id="prodNotes" rows="2"></textarea></div>
     </div>
+    <!-- STEP 2: Equipment Picker -->
+    <div class="modal-body" id="prodStep2" style="display:none;">
+      <div class="eq-picker-header">
+        <div class="eq-picker-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="text" id="eqPickerSearch" placeholder="Buscar equipamento..." oninput="renderEquipPicker()">
+        </div>
+        <div class="eq-picker-count" id="eqPickerCount">0 selecionados</div>
+      </div>
+      <div id="eqPickerGrid"></div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('prodModal')">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveProduction()">Salvar</button>
+      <button class="btn btn-secondary" id="prodBackBtn" style="display:none;" onclick="prodWizardStep(1)">← Voltar</button>
+      <button class="btn btn-primary" id="prodNextBtn" onclick="prodWizardStep(2)">Próximo →</button>
+      <button class="btn btn-primary" id="prodSaveBtn" style="display:none;" onclick="saveProductionWithEquip()">✓ Salvar Produção</button>
     </div>
   </div>
 </div>
@@ -849,9 +905,14 @@ function renderProductions() {
   </table></div>`;
 }
 
+let selectedEquipIds = new Set();
+let prodWizardCurrentStep = 1;
+
 function openProductionModal(id) {
   document.getElementById('prodModalTitle').textContent = id ? 'Editar Produção' : 'Nova Produção';
   document.getElementById('prodId').value = id || '';
+  selectedEquipIds = new Set();
+  
   if (id) {
     const p = productions.find(x => x.id === id);
     if (!p) return;
@@ -859,14 +920,16 @@ function openProductionModal(id) {
     document.getElementById('prodType').value = p.type || 'internal';
     document.getElementById('prodClient').value = p.client || '';
     document.getElementById('prodFeeType').value = p.fee_type || 'fee';
-    document.getElementById('prodStart').value = p.start_date || '';
-    document.getElementById('prodEnd').value = p.end_date || '';
+    document.getElementById('prodStart').value = (p.start_date||'').substring(0,10);
+    document.getElementById('prodEnd').value = (p.end_date||'').substring(0,10);
     document.getElementById('prodResponsible').value = p.responsible_id || '';
     document.getElementById('prodOperator').value = p.operator_id || '';
     document.getElementById('prodStatus').value = p.status;
     document.getElementById('prodNotes').value = p.notes || '';
+    // Pre-select existing equipment
+    productionItems.filter(pi => pi.production_id === id).forEach(pi => selectedEquipIds.add(pi.equipment_id));
   } else {
-    ['prodName','prodClient','prodNotes'].forEach(id => document.getElementById(id).value = '');
+    ['prodName','prodClient','prodNotes'].forEach(fid => document.getElementById(fid).value = '');
     document.getElementById('prodType').value = 'internal';
     document.getElementById('prodFeeType').value = 'fee';
     document.getElementById('prodStatus').value = 'reserved';
@@ -875,12 +938,84 @@ function openProductionModal(id) {
     document.getElementById('prodResponsible').value = '';
     document.getElementById('prodOperator').value = '';
   }
+  prodWizardStep(1);
   openModal('prodModal');
 }
 
 function editProduction(id) { openProductionModal(id); }
 
-async function saveProduction() {
+function prodWizardStep(step) {
+  prodWizardCurrentStep = step;
+  document.getElementById('prodStep1').style.display = step === 1 ? 'block' : 'none';
+  document.getElementById('prodStep2').style.display = step === 2 ? 'block' : 'none';
+  document.getElementById('prodNextBtn').style.display = step === 1 ? 'inline-flex' : 'none';
+  document.getElementById('prodBackBtn').style.display = step === 2 ? 'inline-flex' : 'none';
+  document.getElementById('prodSaveBtn').style.display = step === 2 ? 'inline-flex' : 'none';
+  document.getElementById('prodStep1Label').classList.toggle('active', step === 1);
+  document.getElementById('prodStep2Label').classList.toggle('active', step === 2);
+  
+  if (step === 2) {
+    const name = document.getElementById('prodName').value.trim();
+    if (!name) { toast('Preencha o nome da produção'); prodWizardStep(1); return; }
+    renderEquipPicker();
+  }
+}
+
+function renderEquipPicker() {
+  const search = (document.getElementById('eqPickerSearch')?.value || '').toLowerCase();
+  const grouped = {};
+  
+  categories.forEach(c => { grouped[c.id] = { cat: c, items: [] }; });
+  
+  equipment.forEach(eq => {
+    if (search && !eq.name.toLowerCase().includes(search) && !(eq.internal_code||'').toLowerCase().includes(search)) return;
+    const catId = eq.category_id || 'other';
+    if (!grouped[catId]) grouped[catId] = { cat: { name: 'Outros', icon: '📦' }, items: [] };
+    grouped[catId].items.push(eq);
+  });
+
+  let html = '';
+  for (const [catId, group] of Object.entries(grouped)) {
+    if (group.items.length === 0) continue;
+    const selectedInCat = group.items.filter(eq => selectedEquipIds.has(eq.id)).length;
+    html += `<div class="eq-cat-section">
+      <div class="eq-cat-title">
+        <span>${group.cat.icon}</span> ${esc(group.cat.name)}
+        <span class="eq-cat-count">${group.items.length} itens${selectedInCat > 0 ? ` · <span style="color:var(--red)">${selectedInCat} ✓</span>` : ''}</span>
+      </div>
+      <div class="eq-card-grid">
+        ${group.items.map(eq => {
+          const isSelected = selectedEquipIds.has(eq.id);
+          const isAvailable = eq.status === 'available' || isSelected;
+          return `<div class="eq-card${isSelected ? ' selected' : ''}${!isAvailable ? ' unavailable' : ''}" onclick="${isAvailable ? `toggleEquipSelect('${eq.id}')` : ''}">
+            <div class="eq-card-check">${isSelected ? '✓' : ''}</div>
+            <div class="eq-card-info">
+              <div class="eq-card-name">${esc(eq.name)}</div>
+              <div class="eq-card-meta">
+                <span>${esc(eq.internal_code)}</span>
+                ${eq.brand ? `<span>${esc(eq.brand)}</span>` : ''}
+              </div>
+            </div>
+            ${!isAvailable ? '<div class="eq-card-status" style="color:var(--yellow)">Em uso</div>' : ''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+  
+  if (!html) html = '<div class="empty-state"><p>Nenhum equipamento encontrado</p></div>';
+  
+  document.getElementById('eqPickerGrid').innerHTML = html;
+  document.getElementById('eqPickerCount').textContent = `${selectedEquipIds.size} selecionado${selectedEquipIds.size !== 1 ? 's' : ''}`;
+}
+
+function toggleEquipSelect(eqId) {
+  if (selectedEquipIds.has(eqId)) selectedEquipIds.delete(eqId);
+  else selectedEquipIds.add(eqId);
+  renderEquipPicker();
+}
+
+async function saveProductionWithEquip() {
   const id = document.getElementById('prodId').value;
   const data = {
     name: document.getElementById('prodName').value.trim(),
@@ -895,20 +1030,46 @@ async function saveProduction() {
   };
   if (isAdmin && hasFeeType) data.fee_type = document.getElementById('prodFeeType').value;
   if (!data.name) return toast('Preencha o nome da produção');
+  
   try {
+    let prodId = id;
     if (id) {
       await sb(`/rest/v1/productions?id=eq.${id}`, { method: 'PATCH', body: data, prefer: 'return=minimal' });
     } else {
-      await sb('/rest/v1/productions', { method: 'POST', body: data, prefer: 'return=minimal' });
+      const result = await sb('/rest/v1/productions', { method: 'POST', body: data, prefer: 'return=representation' });
+      prodId = result[0]?.id;
     }
+    
+    // Sync equipment: get current items, add new, skip existing
+    if (prodId) {
+      const existingItems = productionItems.filter(pi => pi.production_id === prodId);
+      const existingEqIds = new Set(existingItems.map(pi => pi.equipment_id));
+      
+      // Add newly selected
+      for (const eqId of selectedEquipIds) {
+        if (!existingEqIds.has(eqId)) {
+          await sb('/rest/v1/production_items', { method: 'POST', body: { production_id: prodId, equipment_id: eqId }, prefer: 'return=minimal' });
+        }
+      }
+      // Remove deselected
+      for (const item of existingItems) {
+        if (!selectedEquipIds.has(item.equipment_id)) {
+          await sb(`/rest/v1/production_items?id=eq.${item.id}`, { method: 'DELETE' });
+        }
+      }
+    }
+    
     closeModal('prodModal');
     await loadData();
     renderProductions();
     renderDashboard();
     renderCalendar();
-    toast(id ? 'Produção atualizada' : 'Produção criada');
+    toast(id ? 'Produção atualizada' : `Produção criada com ${selectedEquipIds.size} equipamento(s)`);
   } catch (e) { toast('Erro: ' + e.message); }
 }
+
+// Keep old saveProduction for backward compat
+async function saveProduction() { await saveProductionWithEquip(); }
 
 // ==================== PRODUCTION ITEMS ====================
 let currentProdId = null;
