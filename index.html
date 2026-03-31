@@ -672,7 +672,7 @@ function renderDashboard() {
   // Upcoming productions
   const today = new Date().toISOString().split('T')[0];
   const week = new Date(Date.now() + 7*86400000).toISOString().split('T')[0];
-  const upcoming = productions.filter(p => p.start_date >= today && p.start_date <= week && p.status !== 'cancelled');
+  const upcoming = productions.filter(p => { const sd = (p.start_date||'').substring(0,10); return sd >= today && sd <= week && p.status !== 'cancelled'; });
   
   if (upcoming.length === 0) {
     document.getElementById('upcomingProductions').innerHTML = '<div class="empty-state"><p>Nenhuma produção nos próximos 7 dias</p></div>';
@@ -963,7 +963,11 @@ function renderCalendar() {
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isToday = dateStr === todayStr;
-    const dayProds = productions.filter(p => p.start_date <= dateStr && p.end_date >= dateStr && p.status !== 'cancelled');
+    const dayProds = productions.filter(p => {
+      const sd = (p.start_date||'').substring(0,10);
+      const ed = (p.end_date||'').substring(0,10);
+      return sd <= dateStr && ed >= dateStr && p.status !== 'cancelled';
+    });
     
     html += `<div class="cal-day${isToday ? ' today' : ''}">
       <div class="cal-day-num">${d}</div>
@@ -1022,7 +1026,7 @@ function closeModal(id) { document.getElementById(id).classList.remove('active')
 
 function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-function fmtDate(d) { if (!d) return '—'; const [y,m,dd] = d.split('-'); return `${dd}/${m}`; }
+function fmtDate(d) { if (!d) return '—'; const s = d.substring(0,10); const [y,m,dd] = s.split('-'); return `${dd}/${m}`; }
 function fmtDateTime(d) { if (!d) return '—'; return new Date(d).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }
 
 function statusBadge(s) {
