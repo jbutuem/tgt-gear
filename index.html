@@ -1006,11 +1006,13 @@ function renderEquipPicker() {
   for (const [catId, group] of Object.entries(grouped)) {
     if (group.items.length === 0) continue;
     const selectedInCat = group.items.filter(eq => selectedEquipMap.has(eq.id)).length;
-    const availInCat = group.items.filter(eq => { const rq = reservedQtyMap[eq.id]||0; const tq = eq.quantity||1; return (tq - rq) > 0 || selectedEquipMap.has(eq.id); }).length;
+    const totalUnitsInCat = group.items.reduce((s,eq) => s + (eq.quantity||1), 0);
+    const reservedUnitsInCat = group.items.reduce((s,eq) => s + (reservedQtyMap[eq.id]||0), 0);
+    const availUnitsInCat = totalUnitsInCat - reservedUnitsInCat;
     html += `<div class="eq-cat-section">
       <div class="eq-cat-title">
         <span>${group.cat.icon}</span> ${esc(group.cat.name)}
-        <span class="eq-cat-count">${availUnits}/${totalUnits} disponíve${availUnits === 1 ? 'l' : 'is'}${selectedInCat > 0 ? ` · <span style="color:var(--red)">${selectedInCat} ✓</span>` : ''}</span>
+        <span class="eq-cat-count">${availUnitsInCat}/${totalUnitsInCat} disponíve${availUnitsInCat === 1 ? 'l' : 'is'}${selectedInCat > 0 ? ` · <span style="color:var(--red)">${selectedInCat} ✓</span>` : ''}</span>
       </div>
       <div class="eq-card-grid">
         ${group.items.map(eq => {
