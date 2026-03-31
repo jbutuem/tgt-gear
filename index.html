@@ -154,10 +154,13 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 .cal-day.empty{background:transparent;}
 .cal-day.today{border:1px solid var(--red);}
 .cal-day-num{font-weight:700;color:var(--text2);margin-bottom:4px;}
-.cal-evt{font-size:9px;padding:2px 5px;border-radius:3px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+.cal-evt{font-size:9px;padding:2px 5px;border-radius:3px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:var(--transition);}
+.cal-evt:hover{filter:brightness(1.3);transform:scale(1.02);}
 .cal-evt.fee{background:var(--green-dim);color:var(--green);}
 .cal-evt.extra{background:var(--red-dim);color:var(--red);}
 .cal-evt.default{background:var(--blue-dim);color:var(--blue);}
+.cal-day.has-events{background:var(--surface3);}
+.cal-day.has-events:hover{background:var(--border);}
 
 /* SEARCH */
 .search-bar{position:relative;margin-bottom:16px;}
@@ -307,17 +310,23 @@ body.is-admin .admin-only{display:initial;}
     <div class="page" id="page-productions">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
         <h2 style="font-size:20px;font-weight:700;">Produções</h2>
-        <div style="display:flex;gap:8px;">
-          <select id="prodStatusFilter" style="width:auto;min-width:140px;" onchange="renderProductions()">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <select id="prodStatusFilter" style="width:auto;min-width:130px;" onchange="renderProductions()">
             <option value="">Todos status</option>
             <option value="reserved">Reservada</option>
             <option value="active">Ativa</option>
-            
             <option value="completed">Concluída</option>
             <option value="cancelled">Cancelada</option>
           </select>
+          <select id="prodClientFilter" style="width:auto;min-width:130px;" onchange="renderProductions()">
+            <option value="">Todos clientes</option>
+          </select>
           <button class="btn btn-primary" onclick="openProductionModal()">+ Nova</button>
         </div>
+      </div>
+      <div class="search-bar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="prodSearch" placeholder="Buscar produção ou cliente..." oninput="renderProductions()">
       </div>
       <div id="productionsList"></div>
     </div>
@@ -330,13 +339,24 @@ body.is-admin .admin-only{display:initial;}
             <div class="card-title" id="calTitle">Março 2026</div>
             <div class="card-subtitle">Produções agendadas</div>
           </div>
-          <div style="display:flex;gap:8px;">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <select id="calClientFilter" style="width:auto;min-width:120px;font-size:12px;" onchange="renderCalendar()">
+              <option value="">Todos clientes</option>
+            </select>
+            <select id="calStatusFilter" style="width:auto;min-width:120px;font-size:12px;" onchange="renderCalendar()">
+              <option value="">Todos status</option>
+              <option value="reserved">Reservada</option>
+              <option value="active">Ativa</option>
+              <option value="completed">Concluída</option>
+            </select>
             <button class="btn-icon" onclick="calNav(-1)">‹</button>
             <button class="btn-icon" onclick="calNav(0)">Hoje</button>
             <button class="btn-icon" onclick="calNav(1)">›</button>
           </div>
         </div>
         <div class="cal-grid" id="calGrid"></div>
+        <!-- Day detail panel -->
+        <div id="calDetail" style="display:none;margin-top:16px;"></div>
       </div>
     </div>
 
@@ -790,10 +810,21 @@ async function saveEquipment() {
 }
 
 // ==================== PRODUCTIONS ====================
+function populateProdFilters() {
+  const clients = [...new Set(productions.map(p => p.client).filter(Boolean))].sort();
+  const el = document.getElementById('prodClientFilter');
+  if (el) el.innerHTML = '<option value="">Todos clientes</option>' + clients.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+}
+
 function renderProductions() {
+  populateProdFilters();
   const status = document.getElementById('prodStatusFilter').value;
+  const client = document.getElementById('prodClientFilter')?.value || '';
+  const search = (document.getElementById('prodSearch')?.value || '').toLowerCase();
   let filtered = productions;
   if (status) filtered = filtered.filter(p => p.status === status);
+  if (client) filtered = filtered.filter(p => (p.client||'') === client);
+  if (search) filtered = filtered.filter(p => p.name.toLowerCase().includes(search) || (p.client||'').toLowerCase().includes(search));
 
   if (filtered.length === 0) {
     document.getElementById('productionsList').innerHTML = '<div class="empty-state"><p>Nenhuma produção encontrada</p></div>';
@@ -805,7 +836,7 @@ function renderProductions() {
     ${filtered.map(p => {
       const items = productionItems.filter(pi => pi.production_id === p.id);
       return `<tr>
-        <td style="font-weight:600">${esc(p.name)}</td>
+        <td style="font-weight:600;cursor:pointer;color:var(--red);" onclick="openProductionModal('${p.id}')">${esc(p.name)}</td>
         <td>${esc(p.client||'—')}</td>
         <td style="font-family:var(--mono);font-size:12px;">${fmtDate(p.start_date)} → ${fmtDate(p.end_date)}</td>
         <td>${esc(p.responsible?.name||'—')}</td>
@@ -947,7 +978,23 @@ async function doCheckin(itemId, equipId) {
 }
 
 // ==================== CALENDAR ====================
+function getFilteredProductions() {
+  let prods = productions.filter(p => p.status !== 'cancelled');
+  const cf = document.getElementById('calClientFilter')?.value;
+  const sf = document.getElementById('calStatusFilter')?.value;
+  if (cf) prods = prods.filter(p => (p.client||'') === cf);
+  if (sf) prods = prods.filter(p => p.status === sf);
+  return prods;
+}
+
+function populateCalFilters() {
+  const clients = [...new Set(productions.map(p => p.client).filter(Boolean))].sort();
+  const el = document.getElementById('calClientFilter');
+  if (el) el.innerHTML = '<option value="">Todos clientes</option>' + clients.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+}
+
 function renderCalendar() {
+  populateCalFilters();
   const y = calDate.getFullYear(), m = calDate.getMonth();
   const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   document.getElementById('calTitle').textContent = `${months[m]} ${y}`;
@@ -955,6 +1002,7 @@ function renderCalendar() {
   const firstDay = new Date(y, m, 1).getDay();
   const daysInMonth = new Date(y, m+1, 0).getDate();
   const todayStr = new Date().toISOString().split('T')[0];
+  const filteredProds = getFilteredProductions();
 
   let html = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d => `<div class="cal-head">${d}</div>`).join('');
   
@@ -963,19 +1011,64 @@ function renderCalendar() {
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isToday = dateStr === todayStr;
-    const dayProds = productions.filter(p => {
+    const dayProds = filteredProds.filter(p => {
       const sd = (p.start_date||'').substring(0,10);
       const ed = (p.end_date||'').substring(0,10);
-      return sd <= dateStr && ed >= dateStr && p.status !== 'cancelled';
+      return sd <= dateStr && ed >= dateStr;
     });
+    const hasProds = dayProds.length > 0;
     
-    html += `<div class="cal-day${isToday ? ' today' : ''}">
+    html += `<div class="cal-day${isToday ? ' today' : ''}${hasProds ? ' has-events' : ''}" onclick="showDayDetail('${dateStr}')" style="${hasProds?'cursor:pointer':''}">
       <div class="cal-day-num">${d}</div>
-      ${dayProds.slice(0,3).map(p => `<div class="cal-evt ${hasFeeType && p.fee_type === 'extra_fee' ? 'extra' : hasFeeType && p.fee_type === 'fee' ? 'fee' : 'default'}" title="${esc(p.name)}">${esc(p.name)}</div>`).join('')}
+      ${dayProds.slice(0,3).map(p => `<div class="cal-evt ${hasFeeType && p.fee_type === 'extra_fee' ? 'extra' : hasFeeType && p.fee_type === 'fee' ? 'fee' : 'default'}" onclick="event.stopPropagation();openProductionModal('${p.id}')" title="${esc(p.name)} — ${esc(p.client||'Interna')}">${esc(p.name)}</div>`).join('')}
       ${dayProds.length > 3 ? `<div style="font-size:9px;color:var(--text3)">+${dayProds.length-3} mais</div>` : ''}
     </div>`;
   }
   document.getElementById('calGrid').innerHTML = html;
+  document.getElementById('calDetail').style.display = 'none';
+}
+
+function showDayDetail(dateStr) {
+  const filteredProds = getFilteredProductions();
+  const dayProds = filteredProds.filter(p => {
+    const sd = (p.start_date||'').substring(0,10);
+    const ed = (p.end_date||'').substring(0,10);
+    return sd <= dateStr && ed >= dateStr;
+  });
+  
+  const [y,m,d] = dateStr.split('-');
+  const dayLabel = `${d}/${m}/${y}`;
+  const detail = document.getElementById('calDetail');
+  
+  if (dayProds.length === 0) {
+    detail.innerHTML = `<div style="padding:16px;border-top:1px solid var(--border);">
+      <strong>${dayLabel}</strong> — Nenhuma produção neste dia.
+      <button class="btn btn-primary btn-sm" style="margin-left:12px;" onclick="openProductionModal();document.getElementById('prodStart').value='${dateStr}';document.getElementById('prodEnd').value='${dateStr}';">+ Criar produção</button>
+    </div>`;
+  } else {
+    detail.innerHTML = `<div style="padding:16px;border-top:1px solid var(--border);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <strong>${dayLabel} — ${dayProds.length} produção(ões)</strong>
+        <button class="btn btn-primary btn-sm" onclick="openProductionModal();document.getElementById('prodStart').value='${dateStr}';document.getElementById('prodEnd').value='${dateStr}';">+ Nova</button>
+      </div>
+      <div class="tbl-wrap"><table>
+        <tr><th>Produção</th><th>Cliente</th><th>Responsável</th><th>Status</th>${isAdmin&&hasFeeType?'<th>Fee</th>':''}<th>Equip.</th><th>Ações</th></tr>
+        ${dayProds.map(p => {
+          const items = productionItems.filter(pi => pi.production_id === p.id);
+          return `<tr>
+            <td style="font-weight:600;cursor:pointer;color:var(--red);" onclick="openProductionModal('${p.id}')">${esc(p.name)}</td>
+            <td>${esc(p.client||'—')}</td>
+            <td>${esc(p.responsible?.name||'—')}</td>
+            <td>${statusBadge(p.status)}</td>
+            ${isAdmin&&hasFeeType?`<td>${feeBadge(p.fee_type)}</td>`:''}
+            <td><button class="btn btn-secondary btn-sm" onclick="openItemsModal('${p.id}')">📦 ${items.length}</button></td>
+            <td><button class="btn-icon" onclick="openProductionModal('${p.id}')" title="Editar">✎</button></td>
+          </tr>`;
+        }).join('')}
+      </table></div>
+    </div>`;
+  }
+  detail.style.display = 'block';
 }
 
 function calNav(dir) {
