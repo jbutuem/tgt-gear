@@ -1010,7 +1010,7 @@ function renderEquipPicker() {
     html += `<div class="eq-cat-section">
       <div class="eq-cat-title">
         <span>${group.cat.icon}</span> ${esc(group.cat.name)}
-        <span class="eq-cat-count">${availInCat}/${group.items.length} livres${selectedInCat > 0 ? ` · <span style="color:var(--red)">${selectedInCat} ✓</span>` : ''}</span>
+        <span class="eq-cat-count">${availInCat === group.items.length ? `${group.items.length} itens` : `${availInCat} de ${group.items.length} livres`}${selectedInCat > 0 ? ` · <span style="color:var(--red)">${selectedInCat} ✓</span>` : ''}</span>
       </div>
       <div class="eq-card-grid">
         ${group.items.map(eq => {
@@ -1039,7 +1039,6 @@ function renderEquipPicker() {
             ${isBusy ? `<div class="eq-card-status" style="color:var(--yellow);font-size:9px;max-width:80px;text-align:right;line-height:1.2;">Reservado<br><span style="opacity:0.7">${esc(busyProd).substring(0,15)}</span></div>` : ''}
             ${isMaintenance ? '<div class="eq-card-status" style="color:var(--yellow)">Manutenção</div>' : ''}
           </div>`;
-        }).join('')}
         }).join('')}
       </div>
     </div>`;
