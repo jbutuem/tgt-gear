@@ -968,97 +968,101 @@ function prodWizardStep(step) {
 }
 
 function renderEquipPicker() {
-  const search = (document.getElementById('eqPickerSearch')?.value || '').toLowerCase();
-  const prodStart = document.getElementById('prodStart').value;
-  const prodEnd = document.getElementById('prodEnd').value;
-  const editingProdId = document.getElementById('prodId').value;
-  const grouped = {};
-  
-  // Build a set of equipment IDs that are booked during the selected dates
-  const reservedQtyMap = {};
-  const busyEquipProds = {}; // eqId -> production name
-  if (prodStart && prodEnd) {
-    productions.forEach(prod => {
-      if (prod.status === 'cancelled') return;
-      if (prod.id === editingProdId) return; // don't conflict with self
-      const ps = (prod.start_date||'').substring(0,10);
-      const pe = (prod.end_date||'').substring(0,10);
-      // Check date overlap
-      if (ps <= prodEnd && pe >= prodStart) {
-        productionItems.filter(pi => pi.production_id === prod.id).forEach(pi => {
-          reservedQtyMap[pi.equipment_id] = (reservedQtyMap[pi.equipment_id] || 0) + 1;
-          busyEquipProds[pi.equipment_id] = prod.name;
-        });
-      }
-    });
-  }
-  
-  categories.forEach(c => { grouped[c.id] = { cat: c, items: [] }; });
-  
-  equipment.forEach(eq => {
-    if (search && !eq.name.toLowerCase().includes(search) && !(eq.internal_code||'').toLowerCase().includes(search) && !(eq.brand||'').toLowerCase().includes(search)) return;
-    const catId = eq.category_id || 'other';
-    if (!grouped[catId]) grouped[catId] = { cat: { name: 'Outros', icon: '📦' }, items: [] };
-    grouped[catId].items.push(eq);
-  });
+  var search = (document.getElementById('eqPickerSearch') ? document.getElementById('eqPickerSearch').value : '').toLowerCase();
+  var prodStart = document.getElementById('prodStart').value;
+  var prodEnd = document.getElementById('prodEnd').value;
+  var editingProdId = document.getElementById('prodId').value;
+  var grouped = {};
 
-  let html = '';
-  for (const [catId, group] of Object.entries(grouped)) {
-    if (group.items.length === 0) continue;
-    const selectedInCat = group.items.filter(eq => selectedEquipMap.has(eq.id)).length;
-    const totalUnitsInCat = group.items.reduce((s,eq) => s + (eq.quantity||1), 0);
-    const reservedUnitsInCat = group.items.reduce((s,eq) => s + (reservedQtyMap[eq.id]||0), 0);
-    const availUnitsInCat = totalUnitsInCat - reservedUnitsInCat;
-    html += `<div class="eq-cat-section">
-      <div class="eq-cat-title">
-        <span>${group.cat.icon}</span> ${esc(group.cat.name)}
-        <span class="eq-cat-count">${availUnitsInCat}/${totalUnitsInCat} disponíve${availUnitsInCat === 1 ? 'l' : 'is'}${selectedInCat > 0 ? ` · <span style="color:var(--red)">${selectedInCat} ✓</span>` : ''}</span>
-      </div>
-      <div class="eq-card-grid">
-        ${group.items.map(eq => {
-          const isSelected = selectedEquipMap.has(eq.id);
-          const selQty = selectedEquipMap.get(eq.id) || 0;
-          const totalQty = eq.quantity || 1;
-          const reservedQty = reservedQtyMap[eq.id] || 0;
-          const availQty = Math.max(0, totalQty - reservedQty);
-          const isFullyBooked = availQty === 0 && !isSelected;
-          const busyProd = busyEquipProds[eq.id] || '';
-          const isMaintenance = eq.status === 'maintenance';
-          const isUnavailable = isFullyBooked || isMaintenance;
-          const hasMultiple = totalQty > 1; const maxSel = isSelected ? Math.max(availQty, selQty) : availQty;
-          return `<div class="eq-card${isSelected ? ' selected' : ''}${isUnavailable ? ' unavailable' : ''}" ${isUnavailable ? `title="${isMaintenance ? 'Em manutenção' : 'Reservado: '+esc(busyProd)}"` : ''}>
-            <div class="eq-card-check" onclick="${!isUnavailable ? `toggleEquipSelect('${eq.id}', ${maxSel})` : ''}">${isSelected ? '✓' : ''}</div>
-            <div class="eq-card-info" onclick="${!isUnavailable ? `toggleEquipSelect('${eq.id}', ${maxSel})` : ''}">
-              <div class="eq-card-name">${esc(eq.name)}</div>
-              <div class="eq-card-meta">
-                <span>${esc(eq.internal_code)}</span>
-                ${eq.brand ? `<span>${esc(eq.brand)}</span>` : ''}
-                ${hasMultiple ? `<span style="color:${availQty === totalQty ? 'var(--green)' : availQty > 0 ? 'var(--yellow)' : 'var(--red)'}">${availQty}/${totalQty} disp.</span>` : ''}
-              </div>
-            </div>
-            ${isSelected && hasMultiple ? `<div class="eq-qty-ctrl" onclick="event.stopPropagation()">
-              <button class="eq-qty-btn" onclick="changeEquipQty('${eq.id}',-1,${maxSel})">−</button>
-              <span class="eq-qty-val">${selQty}</span>
-              <button class="eq-qty-btn" onclick="changeEquipQty('${eq.id}',1,${maxSel})">+</button>
-            </div>` : ''}
-            ${isFullyBooked ? `<div class="eq-card-status" style="color:var(--red);font-size:9px;">Indisponível</div>` : ''}
-            ${!isFullyBooked && reservedQty > 0 && !isSelected ? `<div class="eq-card-status" style="color:var(--yellow);font-size:9px;">${reservedQty} reserv.</div>` : ''}
-            ${isMaintenance ? '<div class="eq-card-status" style="color:var(--yellow)">Manutenção</div>' : ''}
-          </div>`;
-        }).join('')}
-      </div>
-    </div>`;
+  // Count reserved units per equipment in overlapping productions
+  var rsvMap = {};
+  var rsvProds = {};
+  if (prodStart && prodEnd) {
+    for (var pi = 0; pi < productions.length; pi++) {
+      var prod = productions[pi];
+      if (prod.status === 'cancelled' || prod.id === editingProdId) continue;
+      var ps = (prod.start_date || '').substring(0, 10);
+      var pe = (prod.end_date || '').substring(0, 10);
+      if (ps <= prodEnd && pe >= prodStart) {
+        for (var pj = 0; pj < productionItems.length; pj++) {
+          if (productionItems[pj].production_id === prod.id) {
+            var eid = productionItems[pj].equipment_id;
+            rsvMap[eid] = (rsvMap[eid] || 0) + 1;
+            rsvProds[eid] = prod.name;
+          }
+        }
+      }
+    }
   }
-  
+
+  for (var ci2 = 0; ci2 < categories.length; ci2++) {
+    grouped[categories[ci2].id] = { cat: categories[ci2], items: [] };
+  }
+  for (var ei = 0; ei < equipment.length; ei++) {
+    var eq = equipment[ei];
+    if (search && eq.name.toLowerCase().indexOf(search) === -1 && (eq.internal_code || '').toLowerCase().indexOf(search) === -1 && (eq.brand || '').toLowerCase().indexOf(search) === -1) continue;
+    var catId = eq.category_id || 'other';
+    if (!grouped[catId]) grouped[catId] = { cat: { name: 'Outros', icon: '\ud83d\udce6' }, items: [] };
+    grouped[catId].items.push(eq);
+  }
+
+  var html = '';
+  var keys = Object.keys(grouped);
+  for (var ki = 0; ki < keys.length; ki++) {
+    var group = grouped[keys[ki]];
+    if (group.items.length === 0) continue;
+    var selInCat = 0, totU = 0, rsvU = 0;
+    for (var gi = 0; gi < group.items.length; gi++) {
+      if (selectedEquipMap.has(group.items[gi].id)) selInCat++;
+      totU += (group.items[gi].quantity || 1);
+      rsvU += (rsvMap[group.items[gi].id] || 0);
+    }
+    var avU = totU - rsvU;
+    html += '<div class="eq-cat-section"><div class="eq-cat-title"><span>' + group.cat.icon + '</span> ' + esc(group.cat.name) + ' <span class="eq-cat-count">' + avU + '/' + totU + ' disponíve' + (avU === 1 ? 'l' : 'is') + (selInCat > 0 ? ' \u00b7 <span style="color:var(--red)">' + selInCat + ' \u2713</span>' : '') + '</span></div><div class="eq-card-grid">';
+    for (var ii = 0; ii < group.items.length; ii++) {
+      var e = group.items[ii];
+      var isSel = selectedEquipMap.has(e.id);
+      var sQty = selectedEquipMap.get(e.id) || 0;
+      var tQty = e.quantity || 1;
+      var rQty = rsvMap[e.id] || 0;
+      var aQty = Math.max(0, tQty - rQty);
+      var maxS = isSel ? Math.max(aQty, sQty) : aQty;
+      var isFull = aQty === 0 && !isSel;
+      var isMaint = e.status === 'maintenance';
+      var isUn = isFull || isMaint;
+      var hasM = tQty > 1;
+      var cls = 'eq-card' + (isSel ? ' selected' : '') + (isUn ? ' unavailable' : '');
+      var bProd = rsvProds[e.id] || '';
+      html += '<div class="' + cls + '">';
+      html += '<div class="eq-card-check" onclick="' + (!isUn ? "toggleEquipSelect('" + e.id + "'," + maxS + ")" : '') + '">' + (isSel ? '\u2713' : '') + '</div>';
+      html += '<div class="eq-card-info" onclick="' + (!isUn ? "toggleEquipSelect('" + e.id + "'," + maxS + ")" : '') + '">';
+      html += '<div class="eq-card-name">' + esc(e.name) + '</div>';
+      html += '<div class="eq-card-meta"><span>' + esc(e.internal_code) + '</span>';
+      if (e.brand) html += '<span>' + esc(e.brand) + '</span>';
+      if (hasM) {
+        var col = aQty === tQty ? 'var(--green)' : aQty > 0 ? 'var(--yellow)' : 'var(--red)';
+        html += '<span style="color:' + col + '">' + aQty + '/' + tQty + ' disp.</span>';
+      }
+      html += '</div></div>';
+      if (isSel && hasM) {
+        html += '<div class="eq-qty-ctrl" onclick="event.stopPropagation()"><button class="eq-qty-btn" onclick="changeEquipQty(\'' + e.id + '\',-1,' + maxS + ')">\u2212</button><span class="eq-qty-val">' + sQty + '</span><button class="eq-qty-btn" onclick="changeEquipQty(\'' + e.id + '\',1,' + maxS + ')">+</button></div>';
+      }
+      if (isFull) html += '<div class="eq-card-status" style="color:var(--red);font-size:9px;">Indispon\u00edvel</div>';
+      if (!isFull && rQty > 0 && !isSel) html += '<div class="eq-card-status" style="color:var(--yellow);font-size:9px;">' + rQty + ' reserv.</div>';
+      if (isMaint) html += '<div class="eq-card-status" style="color:var(--yellow)">Manuten\u00e7\u00e3o</div>';
+      html += '</div>';
+    }
+    html += '</div></div>';
+  }
+
   if (!html) html = '<div class="empty-state"><p>Nenhum equipamento encontrado</p></div>';
-  
   document.getElementById('eqPickerGrid').innerHTML = html;
-  const count = selectedEquipMap.size;
-  const totalUnits = [...selectedEquipMap.values()].reduce((a,b) => a+b, 0);
-  document.getElementById('eqPickerCount').textContent = count === totalUnits 
-    ? `${count} selecionado${count !== 1 ? 's' : ''}` 
-    : `${count} itens · ${totalUnits} un.`;
+  var cnt = selectedEquipMap.size;
+  var tUnits = 0;
+  selectedEquipMap.forEach(function(v) { tUnits += v; });
+  document.getElementById('eqPickerCount').textContent = cnt === tUnits ? cnt + ' selecionado' + (cnt !== 1 ? 's' : '') : cnt + ' itens \u00b7 ' + tUnits + ' un.';
 }
+
 
 function toggleEquipSelect(eqId, maxQty) {
   if (selectedEquipMap.has(eqId)) selectedEquipMap.delete(eqId);
