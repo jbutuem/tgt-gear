@@ -880,47 +880,99 @@ function populateProdFilters() {
 
 function renderProductions() {
   populateProdFilters();
-  const status = document.getElementById('prodStatusFilter').value;
-  const client = document.getElementById('prodClientFilter')?.value || '';
-  const search = (document.getElementById('prodSearch')?.value || '').toLowerCase();
-  let filtered = productions;
-  if (status) filtered = filtered.filter(p => p.status === status);
-  if (client) filtered = filtered.filter(p => (p.client||'') === client);
-  if (search) filtered = filtered.filter(p => p.name.toLowerCase().includes(search) || (p.client||'').toLowerCase().includes(search));
+  var status = document.getElementById('prodStatusFilter').value;
+  var client = (document.getElementById('prodClientFilter') || {}).value || '';
+  var search = (document.getElementById('prodSearch') || {}).value.toLowerCase();
+  var filtered = productions.slice();
+  if (status) filtered = filtered.filter(function(p){ return p.status === status; });
+  if (client) filtered = filtered.filter(function(p){ return (p.client||'') === client; });
+  if (search) filtered = filtered.filter(function(p){ return p.name.toLowerCase().indexOf(search) >= 0 || (p.client||'').toLowerCase().indexOf(search) >= 0; });
 
   if (filtered.length === 0) {
-    document.getElementById('productionsList').innerHTML = '<div class="empty-state"><p>Nenhuma produção encontrada</p></div>';
+    document.getElementById('productionsList').innerHTML = '<div class="empty-state"><p>Nenhuma produ\u00e7\u00e3o encontrada</p></div>';
     return;
   }
 
-  document.getElementById('productionsList').innerHTML = `<div class="tbl-wrap"><table>
-    <tr><th>Produção</th><th>Cliente</th><th>Período</th><th>Responsável</th><th>Status</th>${isAdmin&&hasFeeType?'<th>Fee</th>':''}<th>Equip.</th><th>Ações</th></tr>
-    ${filtered.map(p => {
-      const items = productionItems.filter(pi => pi.production_id === p.id);
-      return `<tr>
-        <td style="font-weight:600;cursor:pointer;color:var(--red);" onclick="openProductionModal('${p.id}')">${esc(p.name)}</td>
-        <td>${esc(p.client||'—')}</td>
-        <td style="font-family:var(--mono);font-size:12px;">${fmtDate(p.start_date)} → ${fmtDate(p.end_date)}</td>
-        <td>${esc(p.responsible?.name||'—')}</td>
-        <td>${statusBadge(p.status)}</td>
-        ${isAdmin&&hasFeeType?`<td>${feeBadge(p.fee_type)}</td>`:''}
-        <td><button class="btn btn-secondary btn-sm" onclick="openItemsModal('${p.id}')">📦 ${items.length}</button></td>
-        <td><button class="btn-icon" onclick="editProduction('${p.id}')" title="Editar">✎</button></td>
-      </tr>`;
-    }).join('')}
-  </table></div>`;
+  var rows = '';
+  for (var i = 0; i < filtered.length; i++) {
+    var p = filtered[i];
+    var items = productionItems.filter(function(pi){ return pi.production_id === p.id; });
+    var respName = p.responsible ? p.responsible.name : '\u2014';
+    var sd = (p.start_date||'').substring(0,10);
+    var ed = (p.end_date||'').substring(0,10);
+    rows += '<tr>';
+    rows += '<td style="font-weight:600;cursor:pointer;color:var(--red)" onclick="viewProdEquipments(\'' + p.id + '\')">' + esc(p.name) + '</td>';
+    rows += '<td>' + esc(p.client||'\u2014') + '</td>';
+    rows += '<td style="font-family:var(--mono);font-size:12px">' + fmtDate(p.start_date) + ' \u2192 ' + fmtDate(p.end_date) + '</td>';
+    rows += '<td>' + esc(respName) + '</td>';
+    rows += '<td>' + statusBadge(p.status) + '</td>';
+    if (isAdmin && hasFeeType) rows += '<td>' + feeBadge(p.fee_type) + '</td>';
+    rows += '<td><button class="btn btn-secondary btn-sm" onclick="viewProdEquipments(\'' + p.id + '\')">\ud83d\udce6 ' + items.length + '</button></td>';
+    rows += '<td><button class="btn-icon" onclick="openProductionModal(\'' + p.id + '\')" title="Editar">\u2699</button></td>';
+    rows += '</tr>';
+  }
+
+  var hdr = '<tr><th>Produ\u00e7\u00e3o</th><th>Cliente</th><th>Per\u00edodo</th><th>Respons\u00e1vel</th><th>Status</th>';
+  if (isAdmin && hasFeeType) hdr += '<th>Fee</th>';
+  hdr += '<th>Equip.</th><th>A\u00e7\u00f5es</th></tr>';
+
+  document.getElementById('productionsList').innerHTML = '<div class="tbl-wrap"><table>' + hdr + rows + '</table></div>';
 }
 
-let selectedEquipMap = new Map(); // eqId -> quantity selected
+// View production equipments (read-only list)
+function viewProdEquipments(prodId) {
+  var p = null;
+  for (var i = 0; i < productions.length; i++) { if (productions[i].id === prodId) { p = productions[i]; break; } }
+  if (!p) return;
+  var items = productionItems.filter(function(pi){ return pi.production_id === prodId; });
+  document.getElementById('itemsModalTitle').textContent = 'Equipamentos da Produ\u00e7\u00e3o';
+  document.getElementById('itemsModalSub').textContent = p.name + (p.client ? ' \u2014 ' + p.client : '');
+
+  var html = '';
+  if (items.length === 0) {
+    html = '<div class="empty-state" style="padding:24px"><p>Nenhum equipamento vinculado</p><button class="btn btn-primary" onclick="closeModal(\'itemsModal\');openProductionModal(\'' + prodId + '\');prodWizardStep(2);">\u2699 Selecionar equipamentos</button></div>';
+  } else {
+    html = '<div class="tbl-wrap"><table><tr><th>Equipamento</th><th>C\u00f3digo</th><th>Categoria</th><th>Status</th>';
+    html += '<th>A\u00e7\u00f5es</th></tr>';
+    for (var j = 0; j < items.length; j++) {
+      var it = items[j];
+      var eq = null;
+      for (var k = 0; k < equipment.length; k++) { if (equipment[k].id === it.equipment_id) { eq = equipment[k]; break; } }
+      var eqName = eq ? eq.name : '\u2014';
+      var eqCode = eq ? eq.internal_code : '\u2014';
+      var catName = eq && eq.categories ? eq.categories.icon + ' ' + eq.categories.name : '\u2014';
+      var stBadge = it.checkout_at && !it.checkin_at ? '<span class="badge badge-in-use">Em uso</span>' : it.checkin_at ? '<span class="badge badge-available">Devolvido</span>' : '<span class="badge badge-reserved">Reservado</span>';
+      html += '<tr><td style="font-weight:600">' + esc(eqName) + '</td>';
+      html += '<td style="font-family:var(--mono);font-size:12px">' + esc(eqCode) + '</td>';
+      html += '<td>' + catName + '</td>';
+      html += '<td>' + stBadge + '</td>';
+      html += '<td>';
+      if (!it.checkout_at) html += '<button class="btn btn-sm btn-primary" onclick="doCheckout(\'' + it.id + '\',\'' + it.equipment_id + '\');closeModal(\'itemsModal\')">Check-out</button>';
+      if (it.checkout_at && !it.checkin_at) html += '<button class="btn btn-sm btn-secondary" onclick="doCheckin(\'' + it.id + '\',\'' + it.equipment_id + '\');closeModal(\'itemsModal\')">Check-in</button>';
+      html += '</td></tr>';
+    }
+    html += '</table></div>';
+    html += '<div style="margin-top:12px;text-align:right"><button class="btn btn-secondary" onclick="closeModal(\'itemsModal\');openProductionModal(\'' + prodId + '\');prodWizardStep(2);">\u2699 Editar equipamentos</button></div>';
+  }
+
+  document.getElementById('itemsList').innerHTML = html;
+  // Hide the old add-item row
+  var addRow = document.querySelector('#itemsModal .modal-body > div:first-child');
+  if (addRow && addRow.querySelector('#addItemEquip')) addRow.style.display = 'none';
+  openModal('itemsModal');
+}
+
+let selectedEquipMap = new Map();
 let prodWizardCurrentStep = 1;
 
 function openProductionModal(id) {
-  document.getElementById('prodModalTitle').textContent = id ? 'Editar Produção' : 'Nova Produção';
+  document.getElementById('prodModalTitle').textContent = id ? 'Editar Produ\u00e7\u00e3o' : 'Nova Produ\u00e7\u00e3o';
   document.getElementById('prodId').value = id || '';
   selectedEquipMap = new Map();
-  
+
   if (id) {
-    const p = productions.find(x => x.id === id);
+    var p = null;
+    for (var i = 0; i < productions.length; i++) { if (productions[i].id === id) { p = productions[i]; break; } }
     if (!p) return;
     document.getElementById('prodName').value = p.name;
     document.getElementById('prodType').value = p.type || 'internal';
@@ -932,10 +984,9 @@ function openProductionModal(id) {
     document.getElementById('prodOperator').value = p.operator_id || '';
     document.getElementById('prodStatus').value = p.status;
     document.getElementById('prodNotes').value = p.notes || '';
-    // Pre-select existing equipment
-    productionItems.filter(pi => pi.production_id === id).forEach(pi => selectedEquipMap.set(pi.equipment_id), 1);
+    productionItems.filter(function(pi){ return pi.production_id === id; }).forEach(function(pi){ selectedEquipMap.set(pi.equipment_id, 1); });
   } else {
-    ['prodName','prodClient','prodNotes'].forEach(fid => document.getElementById(fid).value = '');
+    ['prodName','prodClient','prodNotes'].forEach(function(fid){ document.getElementById(fid).value = ''; });
     document.getElementById('prodType').value = 'internal';
     document.getElementById('prodFeeType').value = 'fee';
     document.getElementById('prodStatus').value = 'reserved';
@@ -959,30 +1010,28 @@ function prodWizardStep(step) {
   document.getElementById('prodSaveBtn').style.display = step === 2 ? 'inline-flex' : 'none';
   document.getElementById('prodStep1Label').classList.toggle('active', step === 1);
   document.getElementById('prodStep2Label').classList.toggle('active', step === 2);
-  
   if (step === 2) {
-    const name = document.getElementById('prodName').value.trim();
-    if (!name) { toast('Preencha o nome da produção'); prodWizardStep(1); return; }
+    var name = document.getElementById('prodName').value.trim();
+    if (!name) { toast('Preencha o nome'); prodWizardStep(1); return; }
     renderEquipPicker();
   }
 }
 
 function renderEquipPicker() {
-  var search = (document.getElementById('eqPickerSearch') ? document.getElementById('eqPickerSearch').value : '').toLowerCase();
+  var search = (document.getElementById('eqPickerSearch') || {value:''}).value.toLowerCase();
   var prodStart = document.getElementById('prodStart').value;
   var prodEnd = document.getElementById('prodEnd').value;
   var editingProdId = document.getElementById('prodId').value;
   var grouped = {};
-
-  // Count reserved units per equipment in overlapping productions
   var rsvMap = {};
   var rsvProds = {};
+
   if (prodStart && prodEnd) {
     for (var pi = 0; pi < productions.length; pi++) {
       var prod = productions[pi];
       if (prod.status === 'cancelled' || prod.id === editingProdId) continue;
-      var ps = (prod.start_date || '').substring(0, 10);
-      var pe = (prod.end_date || '').substring(0, 10);
+      var ps = (prod.start_date||'').substring(0,10);
+      var pe = (prod.end_date||'').substring(0,10);
       if (ps <= prodEnd && pe >= prodStart) {
         for (var pj = 0; pj < productionItems.length; pj++) {
           if (productionItems[pj].production_id === prod.id) {
@@ -995,12 +1044,12 @@ function renderEquipPicker() {
     }
   }
 
-  for (var ci2 = 0; ci2 < categories.length; ci2++) {
-    grouped[categories[ci2].id] = { cat: categories[ci2], items: [] };
+  for (var ci = 0; ci < categories.length; ci++) {
+    grouped[categories[ci].id] = { cat: categories[ci], items: [] };
   }
   for (var ei = 0; ei < equipment.length; ei++) {
     var eq = equipment[ei];
-    if (search && eq.name.toLowerCase().indexOf(search) === -1 && (eq.internal_code || '').toLowerCase().indexOf(search) === -1 && (eq.brand || '').toLowerCase().indexOf(search) === -1) continue;
+    if (search && eq.name.toLowerCase().indexOf(search) < 0 && (eq.internal_code||'').toLowerCase().indexOf(search) < 0 && (eq.brand||'').toLowerCase().indexOf(search) < 0) continue;
     var catId = eq.category_id || 'other';
     if (!grouped[catId]) grouped[catId] = { cat: { name: 'Outros', icon: '\ud83d\udce6' }, items: [] };
     grouped[catId].items.push(eq);
@@ -1018,7 +1067,11 @@ function renderEquipPicker() {
       rsvU += (rsvMap[group.items[gi].id] || 0);
     }
     var avU = totU - rsvU;
-    html += '<div class="eq-cat-section"><div class="eq-cat-title"><span>' + group.cat.icon + '</span> ' + esc(group.cat.name) + ' <span class="eq-cat-count">' + avU + '/' + totU + ' disponíve' + (avU === 1 ? 'l' : 'is') + (selInCat > 0 ? ' \u00b7 <span style="color:var(--red)">' + selInCat + ' \u2713</span>' : '') + '</span></div><div class="eq-card-grid">';
+    html += '<div class="eq-cat-section"><div class="eq-cat-title"><span>' + group.cat.icon + '</span> ' + esc(group.cat.name);
+    html += ' <span class="eq-cat-count">' + avU + '/' + totU + ' dispon\u00edve' + (avU === 1 ? 'l' : 'is');
+    if (selInCat > 0) html += ' \u00b7 <span style="color:var(--red)">' + selInCat + ' \u2713</span>';
+    html += '</span></div><div class="eq-card-grid">';
+
     for (var ii = 0; ii < group.items.length; ii++) {
       var e = group.items[ii];
       var isSel = selectedEquipMap.has(e.id);
@@ -1031,24 +1084,26 @@ function renderEquipPicker() {
       var isMaint = e.status === 'maintenance';
       var isUn = isFull || isMaint;
       var hasM = tQty > 1;
-      var cls = 'eq-card' + (isSel ? ' selected' : '') + (isUn ? ' unavailable' : '');
-      var bProd = rsvProds[e.id] || '';
-      html += '<div class="' + cls + '">';
+      html += '<div class="eq-card' + (isSel ? ' selected' : '') + (isUn ? ' unavailable' : '') + '">';
       html += '<div class="eq-card-check" onclick="' + (!isUn ? "toggleEquipSelect('" + e.id + "'," + maxS + ")" : '') + '">' + (isSel ? '\u2713' : '') + '</div>';
       html += '<div class="eq-card-info" onclick="' + (!isUn ? "toggleEquipSelect('" + e.id + "'," + maxS + ")" : '') + '">';
       html += '<div class="eq-card-name">' + esc(e.name) + '</div>';
       html += '<div class="eq-card-meta"><span>' + esc(e.internal_code) + '</span>';
-      if (e.brand) html += '<span>' + esc(e.brand) + '</span>';
+      if (e.brand) html += ' <span>' + esc(e.brand) + '</span>';
       if (hasM) {
         var col = aQty === tQty ? 'var(--green)' : aQty > 0 ? 'var(--yellow)' : 'var(--red)';
-        html += '<span style="color:' + col + '">' + aQty + '/' + tQty + ' disp.</span>';
+        html += ' <span style="color:' + col + '">' + aQty + '/' + tQty + ' disp.</span>';
       }
       html += '</div></div>';
       if (isSel && hasM) {
-        html += '<div class="eq-qty-ctrl" onclick="event.stopPropagation()"><button class="eq-qty-btn" onclick="changeEquipQty(\'' + e.id + '\',-1,' + maxS + ')">\u2212</button><span class="eq-qty-val">' + sQty + '</span><button class="eq-qty-btn" onclick="changeEquipQty(\'' + e.id + '\',1,' + maxS + ')">+</button></div>';
+        html += '<div class="eq-qty-ctrl" onclick="event.stopPropagation()">';
+        html += '<button class="eq-qty-btn" onclick="changeEquipQty(\'' + e.id + '\',-1,' + maxS + ')">\u2212</button>';
+        html += '<span class="eq-qty-val">' + sQty + '</span>';
+        html += '<button class="eq-qty-btn" onclick="changeEquipQty(\'' + e.id + '\',1,' + maxS + ')">+</button>';
+        html += '</div>';
       }
-      if (isFull) html += '<div class="eq-card-status" style="color:var(--red);font-size:9px;">Indispon\u00edvel</div>';
-      if (!isFull && rQty > 0 && !isSel) html += '<div class="eq-card-status" style="color:var(--yellow);font-size:9px;">' + rQty + ' reserv.</div>';
+      if (isFull) html += '<div class="eq-card-status" style="color:var(--red);font-size:9px">Indispon\u00edvel</div>';
+      if (!isFull && rQty > 0 && !isSel) html += '<div class="eq-card-status" style="color:var(--yellow);font-size:9px">' + rQty + ' reserv.</div>';
       if (isMaint) html += '<div class="eq-card-status" style="color:var(--yellow)">Manuten\u00e7\u00e3o</div>';
       html += '</div>';
     }
@@ -1059,10 +1114,11 @@ function renderEquipPicker() {
   document.getElementById('eqPickerGrid').innerHTML = html;
   var cnt = selectedEquipMap.size;
   var tUnits = 0;
-  selectedEquipMap.forEach(function(v) { tUnits += v; });
-  document.getElementById('eqPickerCount').textContent = cnt === tUnits ? cnt + ' selecionado' + (cnt !== 1 ? 's' : '') : cnt + ' itens \u00b7 ' + tUnits + ' un.';
+  selectedEquipMap.forEach(function(v){ tUnits += v; });
+  if (cnt === 0) document.getElementById('eqPickerCount').textContent = '0 selecionados';
+  else if (cnt === tUnits) document.getElementById('eqPickerCount').textContent = cnt + ' selecionado' + (cnt !== 1 ? 's' : '');
+  else document.getElementById('eqPickerCount').textContent = cnt + ' itens \u00b7 ' + tUnits + ' un.';
 }
-
 
 function toggleEquipSelect(eqId, maxQty) {
   if (selectedEquipMap.has(eqId)) selectedEquipMap.delete(eqId);
@@ -1071,17 +1127,17 @@ function toggleEquipSelect(eqId, maxQty) {
 }
 
 function changeEquipQty(eqId, delta, maxQty) {
-  const current = selectedEquipMap.get(eqId) || 1;
-  const newQty = current + delta;
+  var current = selectedEquipMap.get(eqId) || 1;
+  var newQty = current + delta;
   if (newQty <= 0) { selectedEquipMap.delete(eqId); }
-  else if (newQty > maxQty) { toast(`Máximo: ${maxQty} unidades`); return; }
+  else if (newQty > maxQty) { toast('M\u00e1ximo: ' + maxQty + ' unidades'); return; }
   else { selectedEquipMap.set(eqId, newQty); }
   renderEquipPicker();
 }
 
 async function saveProductionWithEquip() {
-  const id = document.getElementById('prodId').value;
-  const data = {
+  var id = document.getElementById('prodId').value;
+  var data = {
     name: document.getElementById('prodName').value.trim(),
     type: document.getElementById('prodType').value,
     client: document.getElementById('prodClient').value.trim() || null,
@@ -1093,46 +1149,36 @@ async function saveProductionWithEquip() {
     notes: document.getElementById('prodNotes').value.trim() || null
   };
   if (isAdmin && hasFeeType) data.fee_type = document.getElementById('prodFeeType').value;
-  if (!data.name) return toast('Preencha o nome da produção');
-  
+  if (!data.name) return toast('Preencha o nome da produ\u00e7\u00e3o');
   try {
-    let prodId = id;
+    var prodId = id;
     if (id) {
-      await sb(`/rest/v1/productions?id=eq.${id}`, { method: 'PATCH', body: data, prefer: 'return=minimal' });
+      await sb('/rest/v1/productions?id=eq.' + id, { method: 'PATCH', body: data, prefer: 'return=minimal' });
     } else {
-      const result = await sb('/rest/v1/productions', { method: 'POST', body: data, prefer: 'return=representation' });
-      prodId = result[0]?.id;
+      var result = await sb('/rest/v1/productions', { method: 'POST', body: data, prefer: 'return=representation' });
+      prodId = result[0] ? result[0].id : null;
     }
-    
-    // Sync equipment: get current items, add new, skip existing
     if (prodId) {
-      const existingItems = productionItems.filter(pi => pi.production_id === prodId);
-      const existingEqIds = new Set(existingItems.map(pi => pi.equipment_id));
-      
-      // Add newly selected
-      for (const [eqId] of selectedEquipMap) {
+      var existingItems = productionItems.filter(function(pi){ return pi.production_id === prodId; });
+      var existingEqIds = new Set(existingItems.map(function(pi){ return pi.equipment_id; }));
+      for (var [eqId] of selectedEquipMap) {
         if (!existingEqIds.has(eqId)) {
           await sb('/rest/v1/production_items', { method: 'POST', body: { production_id: prodId, equipment_id: eqId }, prefer: 'return=minimal' });
         }
       }
-      // Remove deselected
-      for (const item of existingItems) {
-        if (!selectedEquipMap.has(item.equipment_id)) {
-          await sb(`/rest/v1/production_items?id=eq.${item.id}`, { method: 'DELETE' });
+      for (var ei2 = 0; ei2 < existingItems.length; ei2++) {
+        if (!selectedEquipMap.has(existingItems[ei2].equipment_id)) {
+          await sb('/rest/v1/production_items?id=eq.' + existingItems[ei2].id, { method: 'DELETE' });
         }
       }
     }
-    
     closeModal('prodModal');
     await loadData();
-    renderProductions();
-    renderDashboard();
-    renderCalendar();
-    toast(id ? 'Produção atualizada' : `Produção criada com ${selectedEquipMap.size} equipamento(s)`);
+    renderProductions(); renderDashboard(); renderCalendar();
+    toast(id ? 'Produ\u00e7\u00e3o atualizada' : 'Produ\u00e7\u00e3o criada com ' + selectedEquipMap.size + ' equipamento(s)');
   } catch (e) { toast('Erro: ' + e.message); }
 }
 
-// Keep old saveProduction for backward compat
 async function saveProduction() { await saveProductionWithEquip(); }
 
 // ==================== PRODUCTION ITEMS ====================
