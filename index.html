@@ -975,7 +975,7 @@ function renderEquipPicker() {
   const grouped = {};
   
   // Build a set of equipment IDs that are booked during the selected dates
-  const busyEquipIds = new Set();
+  const reservedQtyMap = {};
   const busyEquipProds = {}; // eqId -> production name
   if (prodStart && prodEnd) {
     productions.forEach(prod => {
@@ -986,7 +986,7 @@ function renderEquipPicker() {
       // Check date overlap
       if (ps <= prodEnd && pe >= prodStart) {
         productionItems.filter(pi => pi.production_id === prod.id).forEach(pi => {
-          busyEquipIds.add(pi.equipment_id);
+          reservedQtyMap[pi.equipment_id] = (reservedQtyMap[pi.equipment_id] || 0) + 1;
           busyEquipProds[pi.equipment_id] = prod.name;
         });
       }
@@ -1006,37 +1006,41 @@ function renderEquipPicker() {
   for (const [catId, group] of Object.entries(grouped)) {
     if (group.items.length === 0) continue;
     const selectedInCat = group.items.filter(eq => selectedEquipMap.has(eq.id)).length;
-    const availInCat = group.items.filter(eq => !busyEquipIds.has(eq.id) || selectedEquipMap.has(eq.id)).length;
+    const availInCat = group.items.filter(eq => { const rq = reservedQtyMap[eq.id]||0; const tq = eq.quantity||1; return (tq - rq) > 0 || selectedEquipMap.has(eq.id); }).length;
     html += `<div class="eq-cat-section">
       <div class="eq-cat-title">
         <span>${group.cat.icon}</span> ${esc(group.cat.name)}
-        <span class="eq-cat-count">${availInCat === group.items.length ? `${group.items.length} itens` : `${availInCat} de ${group.items.length} livres`}${selectedInCat > 0 ? ` · <span style="color:var(--red)">${selectedInCat} ✓</span>` : ''}</span>
+        <span class="eq-cat-count">${availUnits}/${totalUnits} disponíve${availUnits === 1 ? 'l' : 'is'}${selectedInCat > 0 ? ` · <span style="color:var(--red)">${selectedInCat} ✓</span>` : ''}</span>
       </div>
       <div class="eq-card-grid">
         ${group.items.map(eq => {
           const isSelected = selectedEquipMap.has(eq.id);
           const selQty = selectedEquipMap.get(eq.id) || 0;
-          const maxQty = eq.quantity || 1;
-          const isBusy = busyEquipIds.has(eq.id) && !isSelected;
+          const totalQty = eq.quantity || 1;
+          const reservedQty = reservedQtyMap[eq.id] || 0;
+          const availQty = Math.max(0, totalQty - reservedQty);
+          const isFullyBooked = availQty === 0 && !isSelected;
           const busyProd = busyEquipProds[eq.id] || '';
           const isMaintenance = eq.status === 'maintenance';
-          const isUnavailable = isBusy || isMaintenance;
-          const hasMultiple = maxQty > 1;
+          const isUnavailable = isFullyBooked || isMaintenance;
+          const hasMultiple = totalQty > 1; const maxSel = isSelected ? Math.max(availQty, selQty) : availQty;
           return `<div class="eq-card${isSelected ? ' selected' : ''}${isUnavailable ? ' unavailable' : ''}" ${isUnavailable ? `title="${isMaintenance ? 'Em manutenção' : 'Reservado: '+esc(busyProd)}"` : ''}>
-            <div class="eq-card-check" onclick="${!isUnavailable ? `toggleEquipSelect('${eq.id}', ${maxQty})` : ''}">${isSelected ? '✓' : ''}</div>
-            <div class="eq-card-info" onclick="${!isUnavailable ? `toggleEquipSelect('${eq.id}', ${maxQty})` : ''}">
-              <div class="eq-card-name">${esc(eq.name)}${hasMultiple ? ` <span style="font-size:10px;color:var(--text3);font-weight:400">(${maxQty} un.)</span>` : ''}</div>
+            <div class="eq-card-check" onclick="${!isUnavailable ? `toggleEquipSelect('${eq.id}', ${maxSel})` : ''}">${isSelected ? '✓' : ''}</div>
+            <div class="eq-card-info" onclick="${!isUnavailable ? `toggleEquipSelect('${eq.id}', ${maxSel})` : ''}">
+              <div class="eq-card-name">${esc(eq.name)}</div>
               <div class="eq-card-meta">
                 <span>${esc(eq.internal_code)}</span>
                 ${eq.brand ? `<span>${esc(eq.brand)}</span>` : ''}
+                ${hasMultiple ? `<span style="color:${availQty === totalQty ? 'var(--green)' : availQty > 0 ? 'var(--yellow)' : 'var(--red)'}">${availQty}/${totalQty} disp.</span>` : ''}
               </div>
             </div>
             ${isSelected && hasMultiple ? `<div class="eq-qty-ctrl" onclick="event.stopPropagation()">
-              <button class="eq-qty-btn" onclick="changeEquipQty('${eq.id}',-1,${maxQty})">−</button>
+              <button class="eq-qty-btn" onclick="changeEquipQty('${eq.id}',-1,${maxSel})">−</button>
               <span class="eq-qty-val">${selQty}</span>
-              <button class="eq-qty-btn" onclick="changeEquipQty('${eq.id}',1,${maxQty})">+</button>
+              <button class="eq-qty-btn" onclick="changeEquipQty('${eq.id}',1,${maxSel})">+</button>
             </div>` : ''}
-            ${isBusy ? `<div class="eq-card-status" style="color:var(--yellow);font-size:9px;max-width:80px;text-align:right;line-height:1.2;">Reservado<br><span style="opacity:0.7">${esc(busyProd).substring(0,15)}</span></div>` : ''}
+            ${isFullyBooked ? `<div class="eq-card-status" style="color:var(--red);font-size:9px;">Indisponível</div>` : ''}
+            ${!isFullyBooked && reservedQty > 0 && !isSelected ? `<div class="eq-card-status" style="color:var(--yellow);font-size:9px;">${reservedQty} reserv.</div>` : ''}
             ${isMaintenance ? '<div class="eq-card-status" style="color:var(--yellow)">Manutenção</div>' : ''}
           </div>`;
         }).join('')}
