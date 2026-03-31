@@ -1085,8 +1085,8 @@ function renderEquipPicker() {
       var isUn = isFull || isMaint;
       var hasM = tQty > 1;
       html += '<div class="eq-card' + (isSel ? ' selected' : '') + (isUn ? ' unavailable' : '') + '">';
-      html += '<div class="eq-card-check" onclick="' + (!isUn ? "toggleEquipSelect('" + e.id + "'," + maxS + ")" : '') + '">' + (isSel ? '\u2713' : '') + '</div>';
-      html += '<div class="eq-card-info" onclick="' + (!isUn ? "toggleEquipSelect('" + e.id + "'," + maxS + ")" : '') + '">';
+      html += '<div class="eq-card-check" onclick="' + (!isMaint ? "toggleEquipSelect('" + e.id + "'," + Math.max(maxS, 1) + ")" : '') + '">' + (isSel ? '\u2713' : '') + '</div>';
+      html += '<div class="eq-card-info" onclick="' + (!isMaint ? "toggleEquipSelect('" + e.id + "'," + Math.max(maxS, 1) + ")" : '') + '">';
       html += '<div class="eq-card-name">' + esc(e.name) + '</div>';
       html += '<div class="eq-card-meta"><span>' + esc(e.internal_code) + '</span>';
       if (e.brand) html += ' <span>' + esc(e.brand) + '</span>';
@@ -1121,8 +1121,9 @@ function renderEquipPicker() {
 }
 
 function toggleEquipSelect(eqId, maxQty) {
-  if (selectedEquipMap.has(eqId)) selectedEquipMap.delete(eqId);
-  else selectedEquipMap.set(eqId, 1);
+  if (selectedEquipMap.has(eqId)) { selectedEquipMap.delete(eqId); }
+  else if (maxQty > 0) { selectedEquipMap.set(eqId, 1); }
+  else { toast('Equipamento indispon\u00edvel'); return; }
   renderEquipPicker();
 }
 
