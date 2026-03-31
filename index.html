@@ -233,6 +233,12 @@ body.is-admin .admin-only{display:initial;}
 .eq-card-status{font-size:9px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;}
 .eq-card.selected .eq-card-name{color:var(--red);}
 
+/* Quantity controls */
+.eq-qty-ctrl{display:flex;align-items:center;gap:4px;flex-shrink:0;}
+.eq-qty-btn{width:24px;height:24px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:var(--transition);}
+.eq-qty-btn:hover{border-color:var(--red);color:var(--red);background:var(--red-dim);}
+.eq-qty-val{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--red);min-width:20px;text-align:center;}
+
 @media(max-width:640px){
   .eq-card-grid{grid-template-columns:1fr;}
 }
@@ -905,13 +911,13 @@ function renderProductions() {
   </table></div>`;
 }
 
-let selectedEquipIds = new Set();
+let selectedEquipMap = new Map(); // eqId -> quantity selected
 let prodWizardCurrentStep = 1;
 
 function openProductionModal(id) {
   document.getElementById('prodModalTitle').textContent = id ? 'Editar Produção' : 'Nova Produção';
   document.getElementById('prodId').value = id || '';
-  selectedEquipIds = new Set();
+  selectedEquipMap = new Map();
   
   if (id) {
     const p = productions.find(x => x.id === id);
@@ -927,7 +933,7 @@ function openProductionModal(id) {
     document.getElementById('prodStatus').value = p.status;
     document.getElementById('prodNotes').value = p.notes || '';
     // Pre-select existing equipment
-    productionItems.filter(pi => pi.production_id === id).forEach(pi => selectedEquipIds.add(pi.equipment_id));
+    productionItems.filter(pi => pi.production_id === id).forEach(pi => selectedEquipMap.set(pi.equipment_id), 1);
   } else {
     ['prodName','prodClient','prodNotes'].forEach(fid => document.getElementById(fid).value = '');
     document.getElementById('prodType').value = 'internal';
@@ -963,12 +969,34 @@ function prodWizardStep(step) {
 
 function renderEquipPicker() {
   const search = (document.getElementById('eqPickerSearch')?.value || '').toLowerCase();
+  const prodStart = document.getElementById('prodStart').value;
+  const prodEnd = document.getElementById('prodEnd').value;
+  const editingProdId = document.getElementById('prodId').value;
   const grouped = {};
+  
+  // Build a set of equipment IDs that are booked during the selected dates
+  const busyEquipIds = new Set();
+  const busyEquipProds = {}; // eqId -> production name
+  if (prodStart && prodEnd) {
+    productions.forEach(prod => {
+      if (prod.status === 'cancelled') return;
+      if (prod.id === editingProdId) return; // don't conflict with self
+      const ps = (prod.start_date||'').substring(0,10);
+      const pe = (prod.end_date||'').substring(0,10);
+      // Check date overlap
+      if (ps <= prodEnd && pe >= prodStart) {
+        productionItems.filter(pi => pi.production_id === prod.id).forEach(pi => {
+          busyEquipIds.add(pi.equipment_id);
+          busyEquipProds[pi.equipment_id] = prod.name;
+        });
+      }
+    });
+  }
   
   categories.forEach(c => { grouped[c.id] = { cat: c, items: [] }; });
   
   equipment.forEach(eq => {
-    if (search && !eq.name.toLowerCase().includes(search) && !(eq.internal_code||'').toLowerCase().includes(search)) return;
+    if (search && !eq.name.toLowerCase().includes(search) && !(eq.internal_code||'').toLowerCase().includes(search) && !(eq.brand||'').toLowerCase().includes(search)) return;
     const catId = eq.category_id || 'other';
     if (!grouped[catId]) grouped[catId] = { cat: { name: 'Outros', icon: '📦' }, items: [] };
     grouped[catId].items.push(eq);
@@ -977,27 +1005,41 @@ function renderEquipPicker() {
   let html = '';
   for (const [catId, group] of Object.entries(grouped)) {
     if (group.items.length === 0) continue;
-    const selectedInCat = group.items.filter(eq => selectedEquipIds.has(eq.id)).length;
+    const selectedInCat = group.items.filter(eq => selectedEquipMap.has(eq.id)).length;
+    const availInCat = group.items.filter(eq => !busyEquipIds.has(eq.id) || selectedEquipMap.has(eq.id)).length;
     html += `<div class="eq-cat-section">
       <div class="eq-cat-title">
         <span>${group.cat.icon}</span> ${esc(group.cat.name)}
-        <span class="eq-cat-count">${group.items.length} itens${selectedInCat > 0 ? ` · <span style="color:var(--red)">${selectedInCat} ✓</span>` : ''}</span>
+        <span class="eq-cat-count">${availInCat}/${group.items.length} livres${selectedInCat > 0 ? ` · <span style="color:var(--red)">${selectedInCat} ✓</span>` : ''}</span>
       </div>
       <div class="eq-card-grid">
         ${group.items.map(eq => {
-          const isSelected = selectedEquipIds.has(eq.id);
-          const isAvailable = eq.status === 'available' || isSelected;
-          return `<div class="eq-card${isSelected ? ' selected' : ''}${!isAvailable ? ' unavailable' : ''}" onclick="${isAvailable ? `toggleEquipSelect('${eq.id}')` : ''}">
-            <div class="eq-card-check">${isSelected ? '✓' : ''}</div>
-            <div class="eq-card-info">
-              <div class="eq-card-name">${esc(eq.name)}</div>
+          const isSelected = selectedEquipMap.has(eq.id);
+          const selQty = selectedEquipMap.get(eq.id) || 0;
+          const maxQty = eq.quantity || 1;
+          const isBusy = busyEquipIds.has(eq.id) && !isSelected;
+          const busyProd = busyEquipProds[eq.id] || '';
+          const isMaintenance = eq.status === 'maintenance';
+          const isUnavailable = isBusy || isMaintenance;
+          const hasMultiple = maxQty > 1;
+          return `<div class="eq-card${isSelected ? ' selected' : ''}${isUnavailable ? ' unavailable' : ''}" ${isUnavailable ? `title="${isMaintenance ? 'Em manutenção' : 'Reservado: '+esc(busyProd)}"` : ''}>
+            <div class="eq-card-check" onclick="${!isUnavailable ? `toggleEquipSelect('${eq.id}', ${maxQty})` : ''}">${isSelected ? '✓' : ''}</div>
+            <div class="eq-card-info" onclick="${!isUnavailable ? `toggleEquipSelect('${eq.id}', ${maxQty})` : ''}">
+              <div class="eq-card-name">${esc(eq.name)}${hasMultiple ? ` <span style="font-size:10px;color:var(--text3);font-weight:400">(${maxQty} un.)</span>` : ''}</div>
               <div class="eq-card-meta">
                 <span>${esc(eq.internal_code)}</span>
                 ${eq.brand ? `<span>${esc(eq.brand)}</span>` : ''}
               </div>
             </div>
-            ${!isAvailable ? '<div class="eq-card-status" style="color:var(--yellow)">Em uso</div>' : ''}
+            ${isSelected && hasMultiple ? `<div class="eq-qty-ctrl" onclick="event.stopPropagation()">
+              <button class="eq-qty-btn" onclick="changeEquipQty('${eq.id}',-1,${maxQty})">−</button>
+              <span class="eq-qty-val">${selQty}</span>
+              <button class="eq-qty-btn" onclick="changeEquipQty('${eq.id}',1,${maxQty})">+</button>
+            </div>` : ''}
+            ${isBusy ? `<div class="eq-card-status" style="color:var(--yellow);font-size:9px;max-width:80px;text-align:right;line-height:1.2;">Reservado<br><span style="opacity:0.7">${esc(busyProd).substring(0,15)}</span></div>` : ''}
+            ${isMaintenance ? '<div class="eq-card-status" style="color:var(--yellow)">Manutenção</div>' : ''}
           </div>`;
+        }).join('')}
         }).join('')}
       </div>
     </div>`;
@@ -1006,12 +1048,25 @@ function renderEquipPicker() {
   if (!html) html = '<div class="empty-state"><p>Nenhum equipamento encontrado</p></div>';
   
   document.getElementById('eqPickerGrid').innerHTML = html;
-  document.getElementById('eqPickerCount').textContent = `${selectedEquipIds.size} selecionado${selectedEquipIds.size !== 1 ? 's' : ''}`;
+  const count = selectedEquipMap.size;
+  const totalUnits = [...selectedEquipMap.values()].reduce((a,b) => a+b, 0);
+  document.getElementById('eqPickerCount').textContent = count === totalUnits 
+    ? `${count} selecionado${count !== 1 ? 's' : ''}` 
+    : `${count} itens · ${totalUnits} un.`;
 }
 
-function toggleEquipSelect(eqId) {
-  if (selectedEquipIds.has(eqId)) selectedEquipIds.delete(eqId);
-  else selectedEquipIds.add(eqId);
+function toggleEquipSelect(eqId, maxQty) {
+  if (selectedEquipMap.has(eqId)) selectedEquipMap.delete(eqId);
+  else selectedEquipMap.set(eqId, 1);
+  renderEquipPicker();
+}
+
+function changeEquipQty(eqId, delta, maxQty) {
+  const current = selectedEquipMap.get(eqId) || 1;
+  const newQty = current + delta;
+  if (newQty <= 0) { selectedEquipMap.delete(eqId); }
+  else if (newQty > maxQty) { toast(`Máximo: ${maxQty} unidades`); return; }
+  else { selectedEquipMap.set(eqId, newQty); }
   renderEquipPicker();
 }
 
@@ -1046,14 +1101,14 @@ async function saveProductionWithEquip() {
       const existingEqIds = new Set(existingItems.map(pi => pi.equipment_id));
       
       // Add newly selected
-      for (const eqId of selectedEquipIds) {
+      for (const [eqId] of selectedEquipMap) {
         if (!existingEqIds.has(eqId)) {
           await sb('/rest/v1/production_items', { method: 'POST', body: { production_id: prodId, equipment_id: eqId }, prefer: 'return=minimal' });
         }
       }
       // Remove deselected
       for (const item of existingItems) {
-        if (!selectedEquipIds.has(item.equipment_id)) {
+        if (!selectedEquipMap.has(item.equipment_id)) {
           await sb(`/rest/v1/production_items?id=eq.${item.id}`, { method: 'DELETE' });
         }
       }
@@ -1064,7 +1119,7 @@ async function saveProductionWithEquip() {
     renderProductions();
     renderDashboard();
     renderCalendar();
-    toast(id ? 'Produção atualizada' : `Produção criada com ${selectedEquipIds.size} equipamento(s)`);
+    toast(id ? 'Produção atualizada' : `Produção criada com ${selectedEquipMap.size} equipamento(s)`);
   } catch (e) { toast('Erro: ' + e.message); }
 }
 
